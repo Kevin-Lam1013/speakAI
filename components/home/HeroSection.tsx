@@ -1,79 +1,110 @@
-import { Box, Button, Container, Stack, useTheme } from '@mui/material';
+import { Box, Button, Container, Stack, useTheme, styled } from '@mui/material';
 import { motion } from 'framer-motion';
-import AnimatedText from '../shared/AnimatedText';
+import AnimatedText from '@/components/shared/AnimatedText';
 import { FC } from 'react';
 
-const HeroSection: FC = () => {
-  const theme = useTheme();
+const HeroContainer = styled(Box)({
+  minHeight: '80vh',
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center',
+  alignItems: 'center',
+  textAlign: 'center',
+  paddingTop: 64,
+  paddingBottom: 64,
+});
 
+const StyledTitle = styled(AnimatedText)(({ theme }) => ({
+  '& .MuiTypography-root': {
+    marginBottom: theme.spacing(2),
+    fontWeight: 'bold',
+    ...(theme.palette.mode === 'dark' && {
+      background: 'linear-gradient(180deg, #F8FAFC 0%, #CBD5E1 100%)',
+      WebkitBackgroundClip: 'text',
+      WebkitTextFillColor: 'transparent',
+      textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)',
+    }),
+  },
+}));
+
+const StyledSubtitle = styled(AnimatedText)(({ theme }) => ({
+  '& .MuiTypography-root': {
+    marginBottom: theme.spacing(4),
+    ...(theme.palette.mode === 'dark' && {
+      textShadow: '0 1px 2px rgba(0, 0, 0, 0.2)',
+    }),
+  },
+}));
+
+const ButtonContainer = styled(Stack)(({ theme }) => ({
+  marginTop: theme.spacing(4),
+}));
+
+const DemoContainer = styled(Box)(({ theme }) => ({
+  marginTop: theme.spacing(8),
+}));
+
+// Translation demo styled components
+const DemoWrapper = styled(Box)({
+  position: 'relative',
+  height: '200px',
+  width: '100%',
+});
+
+const BubbleWrapper = styled(Box)(({ theme }) => ({
+  backgroundColor: theme.palette.background.paper,
+  padding: theme.spacing(2),
+  borderRadius: theme.spacing(2),
+  boxShadow: theme.shadows[2],
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+}));
+
+const HeroSection: FC = () => {
   return (
     <Container maxWidth="lg">
-      <Box
-        sx={{
-          minHeight: '80vh',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          textAlign: 'center',
-          py: 8,
-        }}
-      >
-        <AnimatedText
+      <HeroContainer>
+        <StyledTitle
           TypographyProps={{
             variant: 'h1',
             component: 'h1',
-            mb: 2,
-            fontWeight: 'bold',
-            sx: {
-              background:
-                theme.palette.mode === 'dark'
-                  ? 'linear-gradient(180deg, #F8FAFC 0%, #CBD5E1 100%)'
-                  : 'inherit',
-              WebkitBackgroundClip: theme.palette.mode === 'dark' ? 'text' : 'inherit',
-              WebkitTextFillColor: theme.palette.mode === 'dark' ? 'transparent' : 'inherit',
-              textShadow: theme.palette.mode === 'dark' ? '0 2px 4px rgba(0, 0, 0, 0.3)' : 'none',
-            },
           }}
         >
           Real-time Translation
           <br />
           Made Simple
-        </AnimatedText>
+        </StyledTitle>
 
-        <AnimatedText
+        <StyledSubtitle
           delay={0.2}
           TypographyProps={{
             variant: 'h5',
             color: 'text.secondary',
-            mb: 4,
-            sx: {
-              textShadow: theme.palette.mode === 'dark' ? '0 1px 2px rgba(0, 0, 0, 0.2)' : 'none',
-            },
           }}
         >
           Break Language Barriers Instantly
-        </AnimatedText>
+        </StyledSubtitle>
 
         <motion.div
           initial={{ opacity: 0, scale: 0.5 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.4 }}
         >
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 4 }}>
+          <ButtonContainer direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <Button variant="contained" size="large" color="primary" href="/create-room">
               Get Started
             </Button>
             <Button variant="outlined" size="large" color="primary" href="#features">
               Learn More
             </Button>
-          </Stack>
+          </ButtonContainer>
         </motion.div>
 
-        <Box sx={{ mt: 8 }}>
+        <DemoContainer>
           <TranslationDemo />
-        </Box>
-      </Box>
+        </DemoContainer>
+      </HeroContainer>
     </Container>
   );
 };
@@ -87,13 +118,7 @@ const TranslationDemo: FC = () => {
   ];
 
   return (
-    <Box
-      sx={{
-        position: 'relative',
-        height: '200px',
-        width: '100%',
-      }}
-    >
+    <DemoWrapper>
       {bubbles.map((bubble, index) => (
         <motion.div
           key={bubble.lang}
@@ -114,17 +139,7 @@ const TranslationDemo: FC = () => {
             top: '50%',
           }}
         >
-          <Box
-            sx={{
-              bgcolor: 'background.paper',
-              p: 2,
-              borderRadius: 2,
-              boxShadow: 2,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-            }}
-          >
+          <BubbleWrapper>
             <AnimatedText TypographyProps={{ variant: 'h6' }}>{bubble.text}</AnimatedText>
             <AnimatedText
               TypographyProps={{
@@ -134,10 +149,10 @@ const TranslationDemo: FC = () => {
             >
               {bubble.lang}
             </AnimatedText>
-          </Box>
+          </BubbleWrapper>
         </motion.div>
       ))}
-    </Box>
+    </DemoWrapper>
   );
 };
 

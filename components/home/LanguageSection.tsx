@@ -1,49 +1,85 @@
-import { Box, Container, Paper, useTheme } from '@mui/material';
+import { Box, Container, Paper, useTheme, styled } from '@mui/material';
 import { motion } from 'framer-motion';
-import { statistics, supportedLanguages } from '../../constants/features';
-import AnimatedText from '../shared/AnimatedText';
+import { statistics, supportedLanguages } from '@/constants/features';
+import AnimatedText from '@/components/shared/AnimatedText';
 import { FC } from 'react';
 
-const LanguageSection: FC = () => {
-  const theme = useTheme();
+const StyledSection = styled(Box)(({ theme }) => ({
+  paddingTop: theme.spacing(8),
+  paddingBottom: theme.spacing(8),
+}));
 
+const StatisticsGrid = styled(Box)({
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 32,
+  justifyContent: 'center',
+  marginBottom: 64,
+});
+
+const StatWrapper = styled(Box)(({ theme }) => ({
+  flex: '1 1 100%',
+  minWidth: '100%',
+  maxWidth: '100%',
+  [theme.breakpoints.up('sm')]: {
+    flex: '1 1 calc(33.333% - 32px)',
+    minWidth: 'calc(33.333% - 32px)',
+    maxWidth: 'calc(33.333% - 32px)',
+  },
+}));
+
+const StatContent = styled(Box)({
+  textAlign: 'center',
+});
+
+const LanguagesContainer = styled(Box)({
+  textAlign: 'center',
+  marginBottom: 48,
+});
+
+const LanguageGrid = styled(Box)({
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 16,
+  justifyContent: 'center',
+});
+
+const StyledPaper = styled(Paper)(({ theme }) => ({
+  padding: theme.spacing(2),
+  borderRadius: '50%',
+  width: 80,
+  height: 80,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'transform 0.2s, box-shadow 0.2s',
+  '&:hover': {
+    transform: 'scale(1.1)',
+    boxShadow: theme.shadows[4],
+  },
+}));
+
+const CallToAction = styled(Box)({
+  textAlign: 'center',
+  marginTop: 64,
+});
+
+const LanguageSection: FC = () => {
   return (
-    <Box
-      sx={{
-        py: 8,
-      }}
-    >
+    <StyledSection>
       <Container maxWidth="lg">
         {/* Statistics */}
-        <Box
-          sx={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 4,
-            justifyContent: 'center',
-            mb: 8,
-          }}
-        >
+        <StatisticsGrid>
           {statistics.map((stat, index) => (
-            <Box
-              key={stat.label}
-              sx={{
-                flex: { xs: '1 1 100%', sm: '1 1 calc(33.333% - 32px)' },
-                minWidth: { xs: '100%', sm: 'calc(33.333% - 32px)' },
-                maxWidth: { xs: '100%', sm: 'calc(33.333% - 32px)' },
-              }}
-            >
+            <StatWrapper key={stat.label}>
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.2 }}
                 viewport={{ once: true }}
               >
-                <Box
-                  sx={{
-                    textAlign: 'center',
-                  }}
-                >
+                <StatContent>
                   <AnimatedText
                     TypographyProps={{
                       variant: 'h3',
@@ -61,14 +97,14 @@ const LanguageSection: FC = () => {
                   >
                     {stat.label}
                   </AnimatedText>
-                </Box>
+                </StatContent>
               </motion.div>
-            </Box>
+            </StatWrapper>
           ))}
-        </Box>
+        </StatisticsGrid>
 
         {/* Language Bubbles */}
-        <Box sx={{ textAlign: 'center', mb: 6 }}>
+        <LanguagesContainer>
           <AnimatedText
             TypographyProps={{
               variant: 'h4',
@@ -78,14 +114,7 @@ const LanguageSection: FC = () => {
           >
             Supported Languages
           </AnimatedText>
-          <Box
-            sx={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 2,
-              justifyContent: 'center',
-            }}
-          >
+          <LanguageGrid>
             {supportedLanguages.map((lang, index) => (
               <motion.div
                 key={lang.code}
@@ -94,24 +123,7 @@ const LanguageSection: FC = () => {
                 transition={{ duration: 0.5, delay: index * 0.1 }}
                 viewport={{ once: true }}
               >
-                <Paper
-                  elevation={2}
-                  sx={{
-                    p: 2,
-                    borderRadius: '50%',
-                    width: 80,
-                    height: 80,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'transform 0.2s, box-shadow 0.2s',
-                    '&:hover': {
-                      transform: 'scale(1.1)',
-                      boxShadow: theme.shadows[4],
-                    },
-                  }}
-                >
+                <StyledPaper elevation={2}>
                   <AnimatedText
                     TypographyProps={{
                       variant: 'h6',
@@ -128,14 +140,14 @@ const LanguageSection: FC = () => {
                   >
                     {lang.name}
                   </AnimatedText>
-                </Paper>
+                </StyledPaper>
               </motion.div>
             ))}
-          </Box>
-        </Box>
+          </LanguageGrid>
+        </LanguagesContainer>
 
         {/* Call to Action */}
-        <Box sx={{ textAlign: 'center', mt: 8 }}>
+        <CallToAction>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -161,9 +173,9 @@ const LanguageSection: FC = () => {
               Join thousands of users breaking language barriers
             </AnimatedText>
           </motion.div>
-        </Box>
+        </CallToAction>
       </Container>
-    </Box>
+    </StyledSection>
   );
 };
 

@@ -1,7 +1,7 @@
 import { createTheme } from '@mui/material/styles';
 
 // Modern light theme with tonal palette
-export const theme = createTheme({
+export const lightTheme = createTheme({
   palette: {
     primary: {
       main: '#3B82F6', // Modern blue
@@ -112,7 +112,7 @@ export const theme = createTheme({
 
 // Create dark theme variant with modern aesthetics
 export const darkTheme = createTheme({
-  ...theme,
+  ...lightTheme,
   palette: {
     mode: 'dark',
     primary: {
@@ -238,46 +238,46 @@ export const darkTheme = createTheme({
     },
   },
   typography: {
-    ...theme.typography,
+    ...lightTheme.typography,
     h1: {
-      ...theme.typography.h1,
+      ...lightTheme.typography.h1,
       color: '#F8FAFC', // Slate-50 for maximum contrast
       textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
     },
     h2: {
-      ...theme.typography.h2,
+      ...lightTheme.typography.h2,
       color: '#F1F5F9', // Slate-100
     },
     h3: {
-      ...theme.typography.h3,
+      ...lightTheme.typography.h3,
       color: '#E2E8F0', // Slate-200
     },
     h4: {
-      ...theme.typography.h4,
+      ...lightTheme.typography.h4,
       color: '#E2E8F0', // Slate-200
     },
     h5: {
-      ...theme.typography.h5,
+      ...lightTheme.typography.h5,
       color: '#CBD5E1', // Slate-300
     },
     h6: {
-      ...theme.typography.h6,
+      ...lightTheme.typography.h6,
       color: '#CBD5E1', // Slate-300
     },
     subtitle1: {
-      ...theme.typography.subtitle1,
+      ...lightTheme.typography.subtitle1,
       color: '#94A3B8', // Slate-400
     },
     subtitle2: {
-      ...theme.typography.subtitle2,
+      ...lightTheme.typography.subtitle2,
       color: '#94A3B8', // Slate-400
     },
     body1: {
-      ...theme.typography.body1,
+      ...lightTheme.typography.body1,
       color: '#CBD5E1', // Slate-300
     },
     body2: {
-      ...theme.typography.body2,
+      ...lightTheme.typography.body2,
       color: '#94A3B8', // Slate-400
     },
   },
