@@ -78,17 +78,57 @@ export default function SignupForm() {
   const theme = useTheme();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
     password: '',
     confirmPassword: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement signup logic
-    console.log('Signup form submitted:', formData);
+    setIsLoading(true);
+    setError('');
+
+    // Client-side validation
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          password: formData.password,
+        }),
+        credentials: 'include', // Important for cookies
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Redirect to dashboard using replace to prevent back navigation
+        router.replace('/dashboard');
+      } else {
+        setError(data.message || 'Signup failed. Please try again.');
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      setError('An error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,17 +166,50 @@ export default function SignupForm() {
         </Typography>
 
         <Box component="form" onSubmit={handleSubmit} noValidate>
-          <StyledTextField
-            margin="normal"
-            required
-            fullWidth
-            id="name"
-            label="Name"
-            name="name"
-            autoComplete="name"
-            value={formData.name}
-            onChange={handleChange}
-          />
+          {error && (
+            <Typography
+              color="error"
+              variant="body2"
+              align="center"
+              sx={{
+                mb: 2,
+                p: 1,
+                bgcolor: 'error.light',
+                borderRadius: 1,
+                color: 'error.contrastText',
+              }}
+            >
+              {error}
+            </Typography>
+          )}
+
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <StyledTextField
+              margin="normal"
+              required
+              fullWidth
+              id="firstName"
+              label="First Name"
+              name="firstName"
+              autoComplete="given-name"
+              value={formData.firstName}
+              onChange={handleChange}
+              disabled={isLoading}
+            />
+            <StyledTextField
+              margin="normal"
+              required
+              fullWidth
+              id="lastName"
+              label="Last Name"
+              name="lastName"
+              autoComplete="family-name"
+              value={formData.lastName}
+              onChange={handleChange}
+              disabled={isLoading}
+            />
+          </Box>
+
           <StyledTextField
             margin="normal"
             required
@@ -147,6 +220,7 @@ export default function SignupForm() {
             autoComplete="email"
             value={formData.email}
             onChange={handleChange}
+            disabled={isLoading}
           />
           <StyledTextField
             margin="normal"
@@ -159,6 +233,7 @@ export default function SignupForm() {
             autoComplete="new-password"
             value={formData.password}
             onChange={handleChange}
+            disabled={isLoading}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
@@ -166,6 +241,7 @@ export default function SignupForm() {
                     aria-label="toggle password visibility"
                     onClick={() => setShowPassword(!showPassword)}
                     edge="end"
+                    disabled={isLoading}
                     sx={{
                       color: theme =>
                         theme.palette.mode === 'dark'
@@ -190,6 +266,7 @@ export default function SignupForm() {
             autoComplete="new-password"
             value={formData.confirmPassword}
             onChange={handleChange}
+            disabled={isLoading}
             sx={{ marginBottom: 3 }}
             InputProps={{
               endAdornment: (
@@ -198,6 +275,7 @@ export default function SignupForm() {
                     aria-label="toggle confirm password visibility"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     edge="end"
+                    disabled={isLoading}
                     sx={{
                       color: theme =>
                         theme.palette.mode === 'dark'
@@ -212,8 +290,14 @@ export default function SignupForm() {
             }}
           />
 
-          <StyledButton type="submit" fullWidth variant="contained" size="large">
-            Sign Up
+          <StyledButton
+            type="submit"
+            fullWidth
+            variant="contained"
+            size="large"
+            disabled={isLoading}
+          >
+            {isLoading ? 'Creating Account...' : 'Sign Up'}
           </StyledButton>
 
           <BottomBox>

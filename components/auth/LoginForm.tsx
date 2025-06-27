@@ -17,6 +17,7 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import { api } from '@/lib/api';
 
 const CenteredBox = styled(Box)({
   minHeight: '100vh',
@@ -91,15 +92,38 @@ export default function LoginForm() {
   const router = useRouter();
   const theme = useTheme();
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement login logic
-    console.log('Login form submitted:', formData);
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const response = await api.post('/api/auth/login', formData, { skipAuth: true });
+      const data = await response.json();
+
+      if (data.success) {
+        // Get redirect URL from query params or default to dashboard
+        const params = new URLSearchParams(window.location.search);
+        const redirectUrl = params.get('redirect') || '/dashboard';
+
+        // Use replace instead of push to prevent back button from going back to login
+        router.replace(redirectUrl);
+      } else {
+        setError(data.message || 'Login failed. Please try again.');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('An error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,6 +161,23 @@ export default function LoginForm() {
         </Typography>
 
         <Box component="form" onSubmit={handleSubmit} noValidate>
+          {error && (
+            <Typography
+              color="error"
+              variant="body2"
+              align="center"
+              sx={{
+                mb: 2,
+                p: 1,
+                bgcolor: 'error.light',
+                borderRadius: 1,
+                color: 'error.contrastText',
+              }}
+            >
+              {error}
+            </Typography>
+          )}
+
           <StyledTextField
             margin="normal"
             required
@@ -148,6 +189,7 @@ export default function LoginForm() {
             autoFocus
             value={formData.email}
             onChange={handleChange}
+            disabled={isLoading}
           />
           <StyledTextField
             margin="normal"
@@ -160,6 +202,7 @@ export default function LoginForm() {
             autoComplete="current-password"
             value={formData.password}
             onChange={handleChange}
+            disabled={isLoading}
             sx={{ marginBottom: 3 }}
             InputProps={{
               endAdornment: (
@@ -168,6 +211,7 @@ export default function LoginForm() {
                     aria-label="toggle password visibility"
                     onClick={() => setShowPassword(!showPassword)}
                     edge="end"
+                    disabled={isLoading}
                     sx={{
                       color: theme =>
                         theme.palette.mode === 'dark'
@@ -182,8 +226,14 @@ export default function LoginForm() {
             }}
           />
 
-          <StyledButton type="submit" fullWidth variant="contained" size="large">
-            Sign In
+          <StyledButton
+            type="submit"
+            fullWidth
+            variant="contained"
+            size="large"
+            disabled={isLoading}
+          >
+            {isLoading ? 'Signing In...' : 'Sign In'}
           </StyledButton>
 
           <BottomBox>
