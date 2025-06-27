@@ -135,7 +135,7 @@ const HeroSection: FC = () => {
           transition={{ duration: 0.5, delay: 0.4 }}
         >
           <ButtonContainer direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <Button variant="contained" size="large" color="primary" href="/create-room">
+            <Button variant="contained" size="large" color="primary" href="/login">
               Get Started
             </Button>
             <Button variant="outlined" size="large" color="primary" href="#features">
