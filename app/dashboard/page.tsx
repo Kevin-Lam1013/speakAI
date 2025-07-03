@@ -1,100 +1,141 @@
 'use client';
 
-import { Box, Typography, Button, Container, Paper } from '@mui/material';
+import { useState, useEffect } from 'react';
+import { Box, Typography, Button, Container, Grid, CircularProgress, Alert } from '@mui/material';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import AddIcon from '@mui/icons-material/Add';
+import RoomCard from '@/components/room/RoomCard';
+import CreateRoomModal from '@/components/room/CreateRoomModal';
+import EmptyRoomState from '@/components/room/EmptyRoomState';
+import { Room, CreateRoomData } from '@/types/room';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  const handleLogout = async () => {
-    setIsLoggingOut(true);
+  useEffect(() => {
+    fetchRooms();
+    // TODO: In a real app, you'd get this from your auth context/store, but for now we'll just fetch it from the API
+    fetchCurrentUser();
+  }, []);
 
+  const fetchCurrentUser = async () => {
     try {
-      const response = await fetch('/api/auth/logout', {
+      const response = await fetch('/api/auth/me');
+      if (response.ok) {
+        const data = await response.json();
+        setUserId(data.id);
+      }
+    } catch (err) {
+      console.error('Failed to fetch user:', err);
+    }
+  };
+
+  const fetchRooms = async () => {
+    try {
+      const response = await fetch('/api/rooms');
+      if (!response.ok) throw new Error('Failed to fetch rooms');
+      const data = await response.json();
+      setRooms(data);
+    } catch (err) {
+      setError('Failed to load rooms. Please try again later.');
+      console.error('Error fetching rooms:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateRoom = async (data: CreateRoomData) => {
+    try {
+      const response = await fetch('/api/rooms', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify(data),
       });
 
-      if (response.ok) {
-        // Clear any stored tokens from localStorage/sessionStorage
-        localStorage.removeItem('accessToken');
-        sessionStorage.removeItem('accessToken');
+      if (!response.ok) throw new Error('Failed to create room');
 
-        // Redirect to home page
-        router.push('/');
-        router.refresh();
-      } else {
-        console.error('Logout failed');
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      setIsLoggingOut(false);
+      const newRoom = await response.json();
+      setRooms(prev => [newRoom, ...prev]);
+    } catch (err) {
+      console.error('Error creating room:', err);
+      throw err;
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        router.push('/');
+        router.refresh();
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Paper
-        elevation={3}
-        sx={{
-          p: 4,
-          textAlign: 'center',
-          borderRadius: 2,
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
-        }}
-      >
-        <Typography
-          variant="h3"
-          component="h1"
-          gutterBottom
-          sx={{
-            fontWeight: 'bold',
-            mb: 3,
-          }}
-        >
-          Welcome to the Dashboard
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+        <Typography variant="h4" component="h1">
+          My Rooms
         </Typography>
+        <Box>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setShowCreateModal(true)}
+            sx={{ mr: 2 }}
+          >
+            Create Room
+          </Button>
+          <Button variant="outlined" onClick={handleLogout}>
+            Logout
+          </Button>
+        </Box>
+      </Box>
 
-        <Typography
-          variant="h6"
-          sx={{
-            mb: 4,
-            opacity: 0.9,
-          }}
-        >
-          You have successfully logged in to SpeakAI!
-        </Typography>
+      {error && (
+        <Alert severity="error" sx={{ mb: 4 }}>
+          {error}
+        </Alert>
+      )}
 
-        <Button
-          variant="contained"
-          size="large"
-          onClick={handleLogout}
-          disabled={isLoggingOut}
-          sx={{
-            bgcolor: 'rgba(255, 255, 255, 0.2)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            color: 'white',
-            px: 4,
-            py: 1.5,
-            '&:hover': {
-              bgcolor: 'rgba(255, 255, 255, 0.3)',
-            },
-            '&:disabled': {
-              bgcolor: 'rgba(255, 255, 255, 0.1)',
-              color: 'rgba(255, 255, 255, 0.5)',
-            },
-          }}
-        >
-          {isLoggingOut ? 'Logging out...' : 'Logout'}
-        </Button>
-      </Paper>
+      {rooms.length === 0 ? (
+        <EmptyRoomState onCreateRoom={() => setShowCreateModal(true)} />
+      ) : (
+        <Grid container spacing={3}>
+          {rooms.map(room => (
+            <Grid item xs={12} sm={6} md={4} key={room.id}>
+              <RoomCard room={room} isCreator={userId === room.creatorId} />
+            </Grid>
+          ))}
+        </Grid>
+      )}
+
+      <CreateRoomModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={handleCreateRoom}
+      />
     </Container>
   );
 }
