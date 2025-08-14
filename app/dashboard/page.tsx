@@ -17,30 +17,16 @@ export default function DashboardPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchRooms();
-    // TODO: In a real app, you'd get this from your auth context/store, but for now we'll just fetch it from the API
-    fetchCurrentUser();
-  }, []);
-
-  const fetchCurrentUser = async () => {
-    try {
-      const response = await fetch('/api/auth/me');
-      if (response.ok) {
-        const data = await response.json();
-        setUserId(data.id);
-      }
-    } catch (err) {
-      console.error('Failed to fetch user:', err);
-    }
-  };
-
   const fetchRooms = async () => {
     try {
       const response = await fetch('/api/rooms');
       if (!response.ok) throw new Error('Failed to fetch rooms');
       const data = await response.json();
-      setRooms(data);
+      if (Array.isArray(data)) {
+        setRooms(data);
+      } else {
+        throw new Error('Invalid response format');
+      }
     } catch (err) {
       setError('Failed to load rooms. Please try again later.');
       console.error('Error fetching rooms:', err);
@@ -61,11 +47,34 @@ export default function DashboardPage() {
 
       if (!response.ok) throw new Error('Failed to create room');
 
-      const newRoom = await response.json();
-      setRooms(prev => [newRoom, ...prev]);
+      const result = await response.json();
+      if (result.success && result.room) {
+        // Redirect to the room page using the invite code
+        router.push(`/room/${result.room.inviteCode}`);
+      } else {
+        throw new Error('Invalid response format');
+      }
     } catch (err) {
       console.error('Error creating room:', err);
       throw err;
+    }
+  };
+
+  const handleEndRoom = async (inviteCode: string) => {
+    try {
+      const response = await fetch(`/api/rooms/${inviteCode}/end`, {
+        method: 'PUT',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to end room');
+      }
+
+      // Refresh the rooms list
+      await fetchRooms();
+    } catch (err) {
+      console.error('Error ending room:', err);
+      setError('Failed to end room. Please try again later.');
     }
   };
 
@@ -83,6 +92,68 @@ export default function DashboardPage() {
       console.error('Logout error:', error);
     }
   };
+
+  useEffect(() => {
+    const abortController = new AbortController();
+
+    const initializeData = async () => {
+      try {
+        const response = await fetch('/api/auth/me', {
+          signal: abortController.signal,
+        });
+        if (!response.ok) {
+          if (response.status === 401) {
+            router.push('/');
+            return;
+          }
+          throw new Error('Failed to fetch user data');
+        }
+        const data = await response.json();
+        if (data.success && data.id) {
+          setUserId(data.id);
+        } else {
+          throw new Error('Invalid user data format');
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        console.error('Failed to fetch user:', err);
+        setError('Failed to load user data. Please try again later.');
+      }
+    };
+
+    initializeData();
+    return () => abortController.abort();
+  }, [router]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const abortController = new AbortController();
+
+    const loadRooms = async () => {
+      try {
+        const response = await fetch('/api/rooms', {
+          signal: abortController.signal,
+        });
+        if (!response.ok) throw new Error('Failed to fetch rooms');
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setRooms(data);
+        } else {
+          throw new Error('Invalid response format');
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        setError('Failed to load rooms. Please try again later.');
+        console.error('Error fetching rooms:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadRooms();
+    return () => abortController.abort();
+  }, [userId]);
 
   if (loading) {
     return (
@@ -125,7 +196,11 @@ export default function DashboardPage() {
         <Grid container spacing={3}>
           {rooms.map(room => (
             <Grid item xs={12} sm={6} md={4} key={room.id}>
-              <RoomCard room={room} isCreator={userId === room.creatorId} />
+              <RoomCard
+                room={room}
+                isCreator={userId === room.creatorId}
+                onEndRoom={handleEndRoom}
+              />
             </Grid>
           ))}
         </Grid>

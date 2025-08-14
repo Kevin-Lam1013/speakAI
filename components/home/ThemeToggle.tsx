@@ -18,7 +18,7 @@ const ThemeToggle: FC<ThemeToggleProps> = ({ onToggle, isDarkMode }) => {
       aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
       sx={{
         position: 'fixed',
-        top: theme.spacing(2),
+        bottom: theme.spacing(2),
         right: theme.spacing(2),
         bgcolor: theme.palette.background.paper,
         color: theme.palette.text.primary,

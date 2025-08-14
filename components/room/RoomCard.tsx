@@ -13,13 +13,15 @@ import {
 import { useRouter } from 'next/navigation';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import VideocamIcon from '@mui/icons-material/Videocam';
+import StopIcon from '@mui/icons-material/Stop';
 
 interface RoomCardProps {
   room: Room;
   isCreator: boolean;
+  onEndRoom?: (inviteCode: string) => Promise<void>;
 }
 
-export default function RoomCard({ room, isCreator }: RoomCardProps) {
+export default function RoomCard({ room, isCreator, onEndRoom }: RoomCardProps) {
   const router = useRouter();
   const [copyTooltip, setCopyTooltip] = useState('Copy Invite Link');
 
@@ -76,15 +78,28 @@ export default function RoomCard({ room, isCreator }: RoomCardProps) {
           </Tooltip>
 
           {room.status === 'active' && (
-            <Button
-              variant="contained"
-              startIcon={<VideocamIcon />}
-              onClick={handleJoinRoom}
-              size="small"
-              sx={{ ml: 'auto' }}
-            >
-              Join
-            </Button>
+            <>
+              <Button
+                variant="contained"
+                startIcon={<VideocamIcon />}
+                onClick={handleJoinRoom}
+                size="small"
+                sx={{ ml: 'auto' }}
+              >
+                Join
+              </Button>
+              {isCreator && onEndRoom && (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<StopIcon />}
+                  onClick={() => onEndRoom(room.inviteCode)}
+                  size="small"
+                >
+                  End
+                </Button>
+              )}
+            </>
           )}
         </Box>
       </CardContent>
