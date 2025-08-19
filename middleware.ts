@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyAccessToken } from '@/lib/jwt';
 
 // Define protected and auth routes
-const protectedRoutes = ['/dashboard'];
+const protectedRoutes = ['/dashboard', '/room'];
 const authRoutes = ['/login', '/signup'];
 
 // API routes that don't need token verification

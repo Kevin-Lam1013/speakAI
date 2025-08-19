@@ -118,8 +118,12 @@ export default function SignupForm() {
       const data = await response.json();
 
       if (data.success) {
-        // Redirect to dashboard using replace to prevent back navigation
-        router.replace('/dashboard');
+        // Get redirect URL from query params or default to dashboard
+        const params = new URLSearchParams(window.location.search);
+        const redirectUrl = params.get('redirect') || '/dashboard';
+
+        // Redirect using replace to prevent back navigation
+        router.replace(redirectUrl);
       } else {
         setError(data.message || 'Signup failed. Please try again.');
       }
@@ -306,7 +310,15 @@ export default function SignupForm() {
               <Link
                 component="button"
                 variant="body2"
-                onClick={() => router.push('/login')}
+                onClick={() => {
+                  // Preserve redirect URL when going to login
+                  const params = new URLSearchParams(window.location.search);
+                  const redirectUrl = params.get('redirect');
+                  const loginUrl = redirectUrl
+                    ? `/login?redirect=${encodeURIComponent(redirectUrl)}`
+                    : '/login';
+                  router.push(loginUrl);
+                }}
                 sx={{
                   fontWeight: 'bold',
                   color: theme =>

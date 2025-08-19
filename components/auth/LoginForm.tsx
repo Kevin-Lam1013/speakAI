@@ -242,7 +242,15 @@ export default function LoginForm() {
               <Link
                 component="button"
                 variant="body2"
-                onClick={() => router.push('/signup')}
+                onClick={() => {
+                  // Preserve redirect URL when going to signup
+                  const params = new URLSearchParams(window.location.search);
+                  const redirectUrl = params.get('redirect');
+                  const signupUrl = redirectUrl
+                    ? `/signup?redirect=${encodeURIComponent(redirectUrl)}`
+                    : '/signup';
+                  router.push(signupUrl);
+                }}
                 sx={{
                   fontWeight: 'bold',
                   color: theme =>
