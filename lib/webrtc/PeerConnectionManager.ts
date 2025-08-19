@@ -72,27 +72,25 @@ export class PeerConnectionManager {
       if (this.mediaState.video) {
         // Turn off video
         this.localStream?.getVideoTracks().forEach(track => track.stop());
-        const audioTrack = this.localStream?.getAudioTracks()[0];
-        if (audioTrack) {
-          // Create new stream with only audio
-          const newStream = new MediaStream([audioTrack]);
-          await this.setLocalStream(newStream);
+        const hasAudio = this.mediaState.audio;
+        if (hasAudio) {
+          // Get fresh audio stream to avoid reference issues
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          await this.setLocalStream(audioStream);
         } else {
           await this.setLocalStream(null);
         }
         return false;
       } else {
         // Turn on video
-        const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        const videoTrack = videoStream.getVideoTracks()[0];
-        if (this.localStream) {
-          // Add video to existing stream
-          this.localStream.addTrack(videoTrack);
-          await this.setLocalStream(this.localStream);
-        } else {
-          // Create new stream with video only
-          await this.setLocalStream(videoStream);
+        const hasAudio = this.mediaState.audio;
+        const constraints: MediaStreamConstraints = { video: true };
+        if (hasAudio) {
+          constraints.audio = true;
         }
+
+        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        await this.setLocalStream(newStream);
         return true;
       }
     } catch (error) {
@@ -106,27 +104,25 @@ export class PeerConnectionManager {
       if (this.mediaState.audio) {
         // Turn off audio
         this.localStream?.getAudioTracks().forEach(track => track.stop());
-        const videoTrack = this.localStream?.getVideoTracks()[0];
-        if (videoTrack) {
-          // Create new stream with only video
-          const newStream = new MediaStream([videoTrack]);
-          await this.setLocalStream(newStream);
+        const hasVideo = this.mediaState.video;
+        if (hasVideo) {
+          // Get fresh video stream to avoid reference issues
+          const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          await this.setLocalStream(videoStream);
         } else {
           await this.setLocalStream(null);
         }
         return false;
       } else {
         // Turn on audio
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const audioTrack = audioStream.getAudioTracks()[0];
-        if (this.localStream) {
-          // Add audio to existing stream
-          this.localStream.addTrack(audioTrack);
-          await this.setLocalStream(this.localStream);
-        } else {
-          // Create new stream with audio only
-          await this.setLocalStream(audioStream);
+        const hasVideo = this.mediaState.video;
+        const constraints: MediaStreamConstraints = { audio: true };
+        if (hasVideo) {
+          constraints.video = true;
         }
+
+        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        await this.setLocalStream(newStream);
         return true;
       }
     } catch (error) {
