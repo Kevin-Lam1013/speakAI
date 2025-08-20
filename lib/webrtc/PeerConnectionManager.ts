@@ -42,22 +42,67 @@ export class PeerConnectionManager {
 
     this.localStream = stream;
 
-    // Update all peer connections with the new stream
-    if (stream) {
-      this.peerConnections.forEach(pc => {
-        // Remove old tracks
-        const senders = pc.getSenders();
+    // Update all peer connections with the new stream using replaceTrack
+    for (const [userId, pc] of this.peerConnections.entries()) {
+      const senders = pc.getSenders();
+
+      if (stream) {
+        const videoTrack = stream.getVideoTracks()[0];
+        const audioTrack = stream.getAudioTracks()[0];
+
+        // Replace or add video track
+        const videoSender = senders.find(s => s.track?.kind === 'video');
+        if (videoSender && videoTrack) {
+          try {
+            await videoSender.replaceTrack(videoTrack);
+          } catch (e) {
+            console.warn('Failed to replace video track, removing and adding:', e);
+            pc.removeTrack(videoSender);
+            pc.addTrack(videoTrack, stream);
+          }
+        } else if (videoTrack && !videoSender) {
+          pc.addTrack(videoTrack, stream);
+          // Need to renegotiate when adding new tracks
+          this.triggerRenegotiation(userId);
+        } else if (videoSender && !videoTrack) {
+          pc.removeTrack(videoSender);
+          // Trigger renegotiation when removing tracks too
+          this.triggerRenegotiation(userId);
+        }
+
+        // Replace or add audio track
+        const audioSender = senders.find(s => s.track?.kind === 'audio');
+        if (audioSender && audioTrack) {
+          try {
+            await audioSender.replaceTrack(audioTrack);
+          } catch (e) {
+            console.warn('Failed to replace audio track, removing and adding:', e);
+            pc.removeTrack(audioSender);
+            pc.addTrack(audioTrack, stream);
+          }
+        } else if (audioTrack && !audioSender) {
+          pc.addTrack(audioTrack, stream);
+          // Need to renegotiate when adding new tracks
+          this.triggerRenegotiation(userId);
+        } else if (audioSender && !audioTrack) {
+          pc.removeTrack(audioSender);
+          // Trigger renegotiation when removing tracks too
+          this.triggerRenegotiation(userId);
+        }
+      } else {
+        // Remove all tracks if no stream
         senders.forEach(sender => {
-          pc.removeTrack(sender);
+          if (sender.track) {
+            pc.removeTrack(sender);
+          }
         });
+        // Trigger renegotiation when removing all tracks
+        this.triggerRenegotiation(userId);
+      }
+    }
 
-        // Add new tracks
-        stream.getTracks().forEach(track => {
-          pc.addTrack(track, stream);
-        });
-      });
-
-      // Update media state
+    // Update media state
+    if (stream) {
       this.mediaState = {
         video: stream.getVideoTracks().length > 0,
         audio: stream.getAudioTracks().length > 0,
@@ -65,6 +110,24 @@ export class PeerConnectionManager {
     } else {
       this.mediaState = { video: false, audio: false };
     }
+  }
+
+  private triggerRenegotiation(userId: string) {
+    // Use setTimeout to avoid doing this immediately during the track update
+    setTimeout(async () => {
+      const pc = this.peerConnections.get(userId);
+      if (pc && pc.signalingState === 'stable') {
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          if (this.onRenegotiationNeeded) {
+            this.onRenegotiationNeeded(userId, offer);
+          }
+        } catch (error) {
+          console.error('Failed to renegotiate after adding track:', error);
+        }
+      }
+    }, 100);
   }
 
   async toggleVideo(): Promise<boolean> {
@@ -159,7 +222,46 @@ export class PeerConnectionManager {
 
     switch (type) {
       case 'offer':
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(payload));
+        // Check what tracks the offer contains
+        const offer = new RTCSessionDescription(payload);
+        const hasVideoInOffer = offer.sdp?.includes('m=video') && !offer.sdp?.includes('m=video 0');
+        const hasAudioInOffer = offer.sdp?.includes('m=audio') && !offer.sdp?.includes('m=audio 0');
+
+        await peerConnection.setRemoteDescription(offer);
+
+        // If the offer has no video, trigger stream update
+        if (!hasVideoInOffer) {
+          // Force a stream update by creating a new stream with only audio (if any)
+          setTimeout(() => {
+            const receivers = peerConnection.getReceivers();
+            const activeVideoReceivers = receivers.filter(
+              r => r.track?.kind === 'video' && r.track?.readyState === 'live'
+            );
+            const activeAudioReceivers = receivers.filter(
+              r => r.track?.kind === 'audio' && r.track?.readyState === 'live'
+            );
+
+            if (activeVideoReceivers.length === 0 && activeAudioReceivers.length > 0) {
+              // Create new stream with only audio
+              const audioOnlyStream = new MediaStream(activeAudioReceivers.map(r => r.track!));
+              this.onStreamCallback(fromUserId, audioOnlyStream);
+            } else if (activeVideoReceivers.length === 0 && activeAudioReceivers.length === 0) {
+              // No tracks at all
+              this.onStreamRemoveCallback(fromUserId);
+            }
+          }, 100);
+        }
+
+        // Add local stream to the answer if available
+        if (this.localStream) {
+          this.localStream.getTracks().forEach(track => {
+            const sender = peerConnection.getSenders().find(s => s.track?.kind === track.kind);
+            if (!sender) {
+              peerConnection.addTrack(track, this.localStream!);
+            }
+          });
+        }
+
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
         return {
@@ -196,7 +298,33 @@ export class PeerConnectionManager {
 
     // Handle incoming streams
     peerConnection.ontrack = event => {
-      this.onStreamCallback(userId, event.streams[0]);
+      if (event.streams.length > 0) {
+        const stream = event.streams[0];
+        this.onStreamCallback(userId, stream);
+
+        // Listen for track ended events
+        event.track.addEventListener('ended', () => {
+          // Check if stream still has active video tracks specifically
+          const activeVideoTracks = stream.getVideoTracks().filter(t => t.readyState === 'live');
+          const activeAudioTracks = stream.getAudioTracks().filter(t => t.readyState === 'live');
+
+          if (activeVideoTracks.length === 0 && activeAudioTracks.length === 0) {
+            this.onStreamRemoveCallback(userId);
+          } else {
+            // Stream still has some tracks, update it
+            this.onStreamCallback(userId, stream);
+          }
+        });
+
+        // Also listen for track mute/unmute
+        event.track.addEventListener('mute', () => {
+          this.onStreamCallback(userId, stream);
+        });
+
+        event.track.addEventListener('unmute', () => {
+          this.onStreamCallback(userId, stream);
+        });
+      }
     };
 
     // Handle connection state changes
@@ -244,4 +372,7 @@ export class PeerConnectionManager {
 
   // Callback set by room component to handle sending ICE candidates
   onIceCandidate?: (userId: string, candidate: RTCIceCandidate) => void;
+
+  // Callback set by room component to handle renegotiation
+  onRenegotiationNeeded?: (userId: string, offer: RTCSessionDescriptionInit) => void;
 }

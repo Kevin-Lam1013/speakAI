@@ -128,7 +128,7 @@ export default function RoomPage({ params }: RoomPageProps) {
     id: p.userId,
     name: p.userId === userId ? 'You (Local)' : p.email,
     stream: p.userId === userId ? localStream || undefined : p.stream,
-    isCameraOn: p.userId === userId ? mediaState.video : true, // For now, assume remote cameras are on if stream exists
+    isCameraOn: p.userId === userId ? mediaState.video : p.mediaState?.video || false,
   }));
 
   return (

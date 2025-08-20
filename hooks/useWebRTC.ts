@@ -12,6 +12,7 @@ interface Participant {
   userId: string;
   email: string;
   stream?: MediaStream;
+  mediaState?: MediaState;
 }
 
 interface MediaState {
@@ -35,6 +36,7 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
   const peerManagerRef = useRef<PeerConnectionManager>();
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [mediaState, setMediaState] = useState<MediaState>({ video: false, audio: false });
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Initialize WebRTC and Socket connection
   useEffect(() => {
@@ -83,16 +85,42 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
     };
   }, [roomId, userId, token]);
 
+  // Initialize media streams when connected
+  useEffect(() => {
+    if (isConnected && !isInitialized) {
+      const initializeMedia = async () => {
+        try {
+          if (peerManagerRef.current) {
+            // Start with camera and mic off by default
+            const initialMediaState = { video: false, audio: false };
+            setMediaState(initialMediaState);
+
+            // Send initial media state to other participants
+            await socketClient.sendMediaState(initialMediaState);
+            setIsInitialized(true);
+          }
+        } catch (err) {
+          setError('Failed to initialize media');
+        }
+      };
+
+      initializeMedia();
+    }
+  }, [isConnected, isInitialized]);
+
   // Handle socket events
   useEffect(() => {
     if (!isConnected) return;
 
     const unsubscribes = [
       socketClient.onParticipantJoined(async data => {
-        setParticipants(prev => [...prev, { ...data, stream: undefined }]);
+        setParticipants(prev => [
+          ...prev,
+          { ...data, stream: undefined, mediaState: { video: false, audio: false } },
+        ]);
 
-        // Create and send offer to new participant
-        if (peerManagerRef.current && localStream) {
+        // Create and send offer to new participant (always create offer, even if no local stream)
+        if (peerManagerRef.current) {
           const offer = await peerManagerRef.current.createOffer(data.userId);
           socketClient.sendSignal({
             type: 'offer',
@@ -107,7 +135,19 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
       }),
 
       socketClient.onRoomParticipants(participants => {
-        setParticipants(participants.map(p => ({ ...p, stream: undefined })));
+        setParticipants(
+          participants.map(p => ({
+            ...p,
+            stream: undefined,
+            mediaState: { video: false, audio: false },
+          }))
+        );
+      }),
+
+      socketClient.onMediaStateChange(data => {
+        setParticipants(prev =>
+          prev.map(p => (p.userId === data.userId ? { ...p, mediaState: data.mediaState } : p))
+        );
       }),
 
       socketClient.onSignal(async (data: SignalingMessage) => {
@@ -127,7 +167,7 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
     return () => unsubscribes.forEach(unsub => unsub());
   }, [isConnected, localStream]);
 
-  // Set up ICE candidate handling
+  // Set up ICE candidate handling and renegotiation
   useEffect(() => {
     if (!peerManagerRef.current) return;
 
@@ -138,31 +178,58 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
         targetUserId,
       });
     };
-  }, []);
+
+    peerManagerRef.current.onRenegotiationNeeded = (targetUserId, offer) => {
+      socketClient.sendSignal({
+        type: 'offer',
+        payload: offer,
+        targetUserId,
+      });
+    };
+  }, [isConnected]);
 
   const toggleCamera = useCallback(async () => {
     try {
       if (!peerManagerRef.current) return;
       const isOn = await peerManagerRef.current.toggleVideo();
-      setMediaState(prev => ({ ...prev, video: isOn }));
-      setLocalStream(peerManagerRef.current.getLocalStream());
+      const newMediaState = { ...mediaState, video: isOn };
+      setMediaState(newMediaState);
+      const newLocalStream = peerManagerRef.current.getLocalStream();
+      setLocalStream(newLocalStream);
+
+      // Ensure renegotiation callback is set
+      if (peerManagerRef.current && !peerManagerRef.current.onRenegotiationNeeded) {
+        peerManagerRef.current.onRenegotiationNeeded = (targetUserId, offer) => {
+          socketClient.sendSignal({
+            type: 'offer',
+            payload: offer,
+            targetUserId,
+          });
+        };
+      }
+
+      // Notify other participants of media state change
+      await socketClient.sendMediaState(newMediaState);
     } catch (err) {
-      console.error('Error toggling camera:', err);
       setError('Failed to access camera');
     }
-  }, []);
+  }, [mediaState]);
 
   const toggleAudio = useCallback(async () => {
     try {
       if (!peerManagerRef.current) return;
       const isOn = await peerManagerRef.current.toggleAudio();
-      setMediaState(prev => ({ ...prev, audio: isOn }));
+      const newMediaState = { ...mediaState, audio: isOn };
+      setMediaState(newMediaState);
       setLocalStream(peerManagerRef.current.getLocalStream());
+
+      // Notify other participants of media state change
+      await socketClient.sendMediaState(newMediaState);
     } catch (err) {
       console.error('Error toggling audio:', err);
       setError('Failed to access microphone');
     }
-  }, []);
+  }, [mediaState]);
 
   return {
     participants,

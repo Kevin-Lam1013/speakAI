@@ -108,6 +108,13 @@ class SocketClient {
     this.socket.emit('signal', data);
   }
 
+  async sendMediaState(mediaState: { video: boolean; audio: boolean }): Promise<void> {
+    if (!this.socket) {
+      throw new Error('Socket not connected');
+    }
+    this.socket.emit('media-state-change', mediaState);
+  }
+
   onParticipantJoined(callback: (data: { userId: string; email: string }) => void) {
     this.socket?.on('participant-joined', callback);
     return () => this.socket?.off('participant-joined', callback);
@@ -126,6 +133,13 @@ class SocketClient {
   onRoomParticipants(callback: (participants: { userId: string; email: string }[]) => void) {
     this.socket?.on('room-participants', callback);
     return () => this.socket?.off('room-participants', callback);
+  }
+
+  onMediaStateChange(
+    callback: (data: { userId: string; mediaState: { video: boolean; audio: boolean } }) => void
+  ) {
+    this.socket?.on('media-state-change', callback);
+    return () => this.socket?.off('media-state-change', callback);
   }
 }
 

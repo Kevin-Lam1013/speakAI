@@ -69,14 +69,18 @@ export default function ParticipantVideo({
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+    } else if (videoRef.current && !stream) {
+      videoRef.current.srcObject = null;
     }
-  }, [stream]);
+  }, [stream, name]);
 
   // Check if we have a video track in the stream
   const hasVideoTrack = stream?.getVideoTracks().length
     ? stream.getVideoTracks().length > 0
     : false;
-  const showVideo = isCameraOn && hasVideoTrack && stream;
+
+  // Show video if we have a video track, regardless of isCameraOn state (in case of timing issues)
+  const showVideo = hasVideoTrack && stream;
 
   // Generate initials from name for avatar
   const getInitials = (name: string) => {

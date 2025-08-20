@@ -41,24 +41,24 @@ export function initializeSocketServer(httpServer: HTTPServer) {
     // Handle joining a room
     socket.on('join-room', async (roomId: string) => {
       try {
-        // Join the Socket.IO room
-        await socket.join(roomId);
-
-        // Get all participants in the room
-        const sockets = await io.in(roomId).fetchSockets();
-        const participants = sockets.map(s => ({
+        // Get existing participants before joining
+        const existingSockets = await io.in(roomId).fetchSockets();
+        const existingParticipants = existingSockets.map(s => ({
           userId: s.data.userId,
           email: s.data.email,
         }));
 
-        // Notify everyone in the room about the new participant
-        io.to(roomId).emit('participant-joined', {
+        // Join the Socket.IO room
+        await socket.join(roomId);
+
+        // Notify existing participants about the new participant (not the new participant themselves)
+        socket.to(roomId).emit('participant-joined', {
           userId: socket.data.userId,
           email: socket.data.email,
         });
 
         // Send the list of existing participants to the new participant
-        socket.emit('room-participants', participants);
+        socket.emit('room-participants', existingParticipants);
       } catch (error) {
         console.error('Error joining room:', error);
         socket.emit('error', { message: 'Failed to join room' });
@@ -79,6 +79,19 @@ export function initializeSocketServer(httpServer: HTTPServer) {
           payload,
           fromUserId: socket.data.userId,
           targetUserId,
+        });
+      });
+    });
+
+    // Handle media state changes
+    socket.on('media-state-change', (mediaState: { video: boolean; audio: boolean }) => {
+      // Find all rooms this socket is in and broadcast the media state change
+      const rooms = Array.from(socket.rooms).filter(room => room !== socket.id);
+
+      rooms.forEach(roomId => {
+        socket.to(roomId).emit('media-state-change', {
+          userId: socket.data.userId,
+          mediaState,
         });
       });
     });
