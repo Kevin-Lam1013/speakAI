@@ -21,7 +21,7 @@ const VideoContainer = styled(Box)(({ theme }) => ({
 const Video = styled('video')({
   width: '100%',
   height: '100%',
-  objectFit: 'cover',
+  objectFit: 'contain',
 });
 
 const NameOverlay = styled(Box)(({ theme }) => ({
