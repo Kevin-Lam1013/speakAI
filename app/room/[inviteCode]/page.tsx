@@ -27,6 +27,7 @@ interface Participant {
   id: string;
   name: string;
   stream?: MediaStream;
+  isCameraOn?: boolean;
 }
 
 export default function RoomPage({ params }: RoomPageProps) {
@@ -127,6 +128,7 @@ export default function RoomPage({ params }: RoomPageProps) {
     id: p.userId,
     name: p.userId === userId ? 'You (Local)' : p.email,
     stream: p.userId === userId ? localStream || undefined : p.stream,
+    isCameraOn: p.userId === userId ? mediaState.video : true, // For now, assume remote cameras are on if stream exists
   }));
 
   return (
