@@ -3,9 +3,13 @@
 import { Box, Typography, useTheme, styled, Avatar } from '@mui/material';
 import VideocamOffIcon from '@mui/icons-material/VideocamOff';
 import { motion } from 'framer-motion';
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 
-const VideoContainer = styled(Box)(({ theme }) => ({
+interface VideoContainerProps {
+  isSpeaking: boolean;
+}
+
+const VideoContainer = styled(Box)<VideoContainerProps>(({ theme, isSpeaking }) => ({
   position: 'relative',
   width: '100%',
   height: '100%',
@@ -13,9 +17,15 @@ const VideoContainer = styled(Box)(({ theme }) => ({
   overflow: 'hidden',
   backgroundColor:
     theme.palette.mode === 'dark' ? 'rgba(30, 41, 59, 0.8)' : 'rgba(255, 255, 255, 0.9)',
-  border: `1px solid ${
-    theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+  border: `3px solid ${
+    isSpeaking
+      ? theme.palette.primary.main // Speaking border color
+      : theme.palette.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(0, 0, 0, 0.1)'
   }`,
+  boxShadow: isSpeaking ? `0 0 10px ${theme.palette.primary.main}` : 'none',
+  transition: 'border-color 0.2s ease-in-out',
 }));
 
 const Video = styled('video')({
@@ -64,7 +74,72 @@ export default function ParticipantVideo({
   isCameraOn = true,
 }: ParticipantVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number>();
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const theme = useTheme();
+
+  // Initialize audio analysis
+  useEffect(() => {
+    if (!stream || isMuted) {
+      return;
+    }
+
+    const audioTrack = stream.getAudioTracks()[0];
+    if (!audioTrack) {
+      return;
+    }
+
+    // Create audio context and analyzer
+    const audioContext = new AudioContext();
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.5;
+
+    // Connect stream to analyzer
+    const source = audioContext.createMediaStreamSource(stream);
+    source.connect(analyser);
+
+    audioContextRef.current = audioContext;
+    analyserRef.current = analyser;
+
+    // Start monitoring audio levels
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    let speakingTimeout: NodeJS.Timeout;
+
+    const checkAudioLevel = () => {
+      if (!analyserRef.current) return;
+
+      analyserRef.current.getByteFrequencyData(dataArray);
+      const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+      const isSpeakingNow = average > 30;
+
+      if (isSpeakingNow) {
+        setIsSpeaking(true);
+        if (speakingTimeout) clearTimeout(speakingTimeout);
+        speakingTimeout = setTimeout(() => setIsSpeaking(false), 300);
+      }
+
+      animationFrameRef.current = requestAnimationFrame(checkAudioLevel);
+    };
+
+    checkAudioLevel();
+
+    // Cleanup
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (speakingTimeout) {
+        clearTimeout(speakingTimeout);
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+      setIsSpeaking(false);
+    };
+  }, [stream, isMuted]);
 
   useEffect(() => {
     if (videoRef.current && stream) {
@@ -99,7 +174,7 @@ export default function ParticipantVideo({
       transition={{ duration: 0.3 }}
       style={{ height: '100%' }}
     >
-      <VideoContainer>
+      <VideoContainer isSpeaking={isSpeaking}>
         {showVideo ? (
           <Video ref={videoRef} autoPlay playsInline muted={isMuted} />
         ) : (

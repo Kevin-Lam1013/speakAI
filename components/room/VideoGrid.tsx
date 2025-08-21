@@ -8,6 +8,7 @@ interface Participant {
   name: string;
   stream?: MediaStream;
   isCameraOn?: boolean;
+  isAudioOn?: boolean;
 }
 
 const GridContainer = styled(Box)(({ theme }) => ({
@@ -74,7 +75,7 @@ export default function VideoGrid({ participants, localParticipantId }: VideoGri
           <ParticipantVideo
             stream={participant.stream}
             name={participant.name}
-            isMuted={participant.id === localParticipantId}
+            isMuted={!participant.isAudioOn}
             isCameraOn={participant.isCameraOn}
           />
         </Box>

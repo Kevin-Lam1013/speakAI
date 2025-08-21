@@ -28,6 +28,7 @@ interface Participant {
   name: string;
   stream?: MediaStream;
   isCameraOn?: boolean;
+  isAudioOn?: boolean;
 }
 
 export default function RoomPage({ params }: RoomPageProps) {
@@ -129,6 +130,7 @@ export default function RoomPage({ params }: RoomPageProps) {
     name: p.userId === userId ? 'You (Local)' : p.email,
     stream: p.userId === userId ? localStream || undefined : p.stream,
     isCameraOn: p.userId === userId ? mediaState.video : p.mediaState?.video || false,
+    isAudioOn: p.userId === userId ? mediaState.audio : p.mediaState?.audio || false,
   }));
 
   return (
