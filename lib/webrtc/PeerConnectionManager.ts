@@ -328,7 +328,9 @@ export class PeerConnectionManager {
         existing.addTrack(event.track);
       }
       this.remoteStreams.set(userId, existing);
-      this.onStreamCallback(userId, existing);
+      // Emit a fresh MediaStream instance so consumers detect changes reliably
+      const emitted = new MediaStream(existing.getTracks());
+      this.onStreamCallback(userId, emitted);
 
       // Listen for track ended events
       event.track.addEventListener('ended', () => {
@@ -342,7 +344,8 @@ export class PeerConnectionManager {
             this.remoteStreams.delete(userId);
             this.onStreamRemoveCallback(userId);
           } else {
-            this.onStreamCallback(userId, agg);
+            const emitted2 = new MediaStream(agg.getTracks());
+            this.onStreamCallback(userId, emitted2);
           }
         }
       });
@@ -351,13 +354,19 @@ export class PeerConnectionManager {
       event.track.addEventListener('mute', () => {
         console.log('[PCM] track mute', userId, event.track.kind);
         const agg = this.remoteStreams.get(userId);
-        if (agg) this.onStreamCallback(userId, agg);
+        if (agg) {
+          const emitted3 = new MediaStream(agg.getTracks());
+          this.onStreamCallback(userId, emitted3);
+        }
       });
 
       event.track.addEventListener('unmute', () => {
         console.log('[PCM] track unmute', userId, event.track.kind);
         const agg = this.remoteStreams.get(userId);
-        if (agg) this.onStreamCallback(userId, agg);
+        if (agg) {
+          const emitted4 = new MediaStream(agg.getTracks());
+          this.onStreamCallback(userId, emitted4);
+        }
       });
     };
 

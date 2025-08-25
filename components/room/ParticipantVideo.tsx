@@ -79,6 +79,7 @@ export default function ParticipantVideo({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number>();
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [hasVideo, setHasVideo] = useState<boolean>(Boolean(stream?.getVideoTracks().length));
   const theme = useTheme();
 
   // Initialize audio analysis
@@ -156,10 +157,12 @@ export default function ParticipantVideo({
       if (!stream) {
         if (videoRef.current) videoRef.current.srcObject = null;
         if (audioRef.current) audioRef.current.srcObject = null;
+        setHasVideo(false);
         return;
       }
       const hasVideo = stream.getVideoTracks().length > 0;
       const hasAudio = stream.getAudioTracks().length > 0;
+      setHasVideo(hasVideo);
       console.log('[ParticipantVideo] attach stream to media element', name, {
         isMuted,
         audioTracks: stream.getAudioTracks().length,
@@ -215,13 +218,8 @@ export default function ParticipantVideo({
     if (audioRef.current) audioRef.current.muted = isMuted;
   }, [isMuted]);
 
-  // Check if we have a video track in the stream
-  const hasVideoTrack = stream?.getVideoTracks().length
-    ? stream.getVideoTracks().length > 0
-    : false;
-
-  // Show video if we have a video track, regardless of isCameraOn state (in case of timing issues)
-  const showVideo = hasVideoTrack && stream;
+  // Show video based on live track detection (kept in state to react to addtrack/removetrack)
+  const showVideo = hasVideo;
 
   // Generate initials from name for avatar
   const getInitials = (name: string) => {
@@ -241,9 +239,15 @@ export default function ParticipantVideo({
       style={{ height: '100%' }}
     >
       <VideoContainer isSpeaking={isSpeaking}>
-        {showVideo ? (
-          <Video ref={videoRef} autoPlay playsInline muted={isMuted} />
-        ) : (
+        {/* Always render the video element so ref is present before tracks arrive */}
+        <Video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={isMuted}
+          style={{ display: showVideo ? 'block' : 'none' }}
+        />
+        {!showVideo && (
           <CameraOffPlaceholder>
             <Avatar
               sx={{
