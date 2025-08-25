@@ -2,6 +2,8 @@
 
 import { Box, Typography, useTheme, styled, Avatar } from '@mui/material';
 import VideocamOffIcon from '@mui/icons-material/VideocamOff';
+import MicIcon from '@mui/icons-material/Mic';
+import MicOffIcon from '@mui/icons-material/MicOff';
 import { motion } from 'framer-motion';
 import { useRef, useEffect, useState } from 'react';
 
@@ -48,6 +50,22 @@ const NameOverlay = styled(Box)(({ theme }) => ({
   boxShadow: theme.shadows[2],
 }));
 
+const MicBadge = styled(Box)(({ theme }) => ({
+  position: 'absolute',
+  top: theme.spacing(2),
+  right: theme.spacing(2),
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.spacing(1),
+  padding: theme.spacing(0.5, 1),
+  borderRadius: theme.shape.borderRadius,
+  background: theme.palette.mode === 'dark' ? 'rgba(15, 23, 42, 0.8)' : 'rgba(255, 255, 255, 0.9)',
+  border: `1px solid ${
+    theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+  }`,
+  boxShadow: theme.shadows[2],
+}));
+
 const CameraOffPlaceholder = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
@@ -65,6 +83,7 @@ interface ParticipantVideoProps {
   name: string;
   isMuted?: boolean;
   isCameraOn?: boolean;
+  showMicBadge?: boolean;
 }
 
 export default function ParticipantVideo({
@@ -72,6 +91,7 @@ export default function ParticipantVideo({
   name,
   isMuted = false,
   isCameraOn = true,
+  showMicBadge = true,
 }: ParticipantVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -274,6 +294,16 @@ export default function ParticipantVideo({
 
         {/* Hidden audio element to play audio when there is no video track */}
         <audio ref={audioRef} style={{ display: 'none' }} />
+
+        {showMicBadge && (
+          <MicBadge>
+            {isMuted ? (
+              <MicOffIcon fontSize="small" color="error" />
+            ) : (
+              <MicIcon fontSize="small" color="success" />
+            )}
+          </MicBadge>
+        )}
 
         <NameOverlay>
           <Typography variant="body2" fontWeight={500}>

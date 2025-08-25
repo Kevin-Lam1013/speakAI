@@ -77,6 +77,7 @@ export default function VideoGrid({ participants, localParticipantId }: VideoGri
             name={participant.name}
             isMuted={participant.id === localParticipantId ? true : !participant.isAudioOn}
             isCameraOn={participant.isCameraOn}
+            showMicBadge={participant.id !== localParticipantId}
           />
         </Box>
       ))}
