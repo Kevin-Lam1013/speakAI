@@ -40,14 +40,6 @@ export class PeerConnectionManager {
       this.localStream.getTracks().forEach(track => track.stop());
     }
 
-    // Ensure audio tracks are enabled before setting
-    if (stream) {
-      const audioTracks = stream.getAudioTracks();
-      audioTracks.forEach(track => {
-        track.enabled = true;
-      });
-    }
-
     this.localStream = stream;
 
     // Update all peer connections with the new stream using replaceTrack
@@ -78,36 +70,23 @@ export class PeerConnectionManager {
           this.triggerRenegotiation(userId);
         }
 
-        // Handle audio track
+        // Replace or add audio track
         const audioSender = senders.find(s => s.track?.kind === 'audio');
-
-        if (audioTrack) {
-          // Enable the track
-          audioTrack.enabled = true;
-
-          // Create a dedicated audio stream
-          const audioOnlyStream = new MediaStream([audioTrack]);
-
-          // Remove existing sender if any
-          if (audioSender) {
+        if (audioSender && audioTrack) {
+          try {
+            await audioSender.replaceTrack(audioTrack);
+          } catch (e) {
+            console.warn('Failed to replace audio track, removing and adding:', e);
             pc.removeTrack(audioSender);
+            pc.addTrack(audioTrack, stream);
           }
-
-          // Add the track with the dedicated stream
-          const newSender = pc.addTrack(audioTrack, audioOnlyStream);
-
-          console.log('Audio track handling:', {
-            hadPreviousSender: !!audioSender,
-            newSenderCreated: !!newSender,
-            trackState: {
-              id: audioTrack.id,
-              enabled: audioTrack.enabled,
-              muted: audioTrack.muted,
-              readyState: audioTrack.readyState,
-            },
-          });
-
-          // Always trigger renegotiation for audio changes
+        } else if (audioTrack && !audioSender) {
+          pc.addTrack(audioTrack, stream);
+          // Need to renegotiate when adding new tracks
+          this.triggerRenegotiation(userId);
+        } else if (audioSender && !audioTrack) {
+          pc.removeTrack(audioSender);
+          // Trigger renegotiation when removing tracks too
           this.triggerRenegotiation(userId);
         }
       } else {
@@ -185,44 +164,30 @@ export class PeerConnectionManager {
 
   async toggleAudio(): Promise<boolean> {
     try {
-      if (!this.localStream) {
-        // If no stream exists, create one with audio
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        await this.setLocalStream(stream);
-        this.mediaState.audio = true;
-        return true;
-      }
-
-      const audioTrack = this.localStream.getAudioTracks()[0];
-      if (!audioTrack) {
-        // No audio track, add one
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const newAudioTrack = audioStream.getAudioTracks()[0];
-        this.localStream.addTrack(newAudioTrack);
-
-        // Update peer connections with the new track
-        for (const [userId, pc] of this.peerConnections.entries()) {
-          pc.addTrack(newAudioTrack, this.localStream);
-          this.triggerRenegotiation(userId);
+      if (this.mediaState.audio) {
+        // Turn off audio
+        this.localStream?.getAudioTracks().forEach(track => track.stop());
+        const hasVideo = this.mediaState.video;
+        if (hasVideo) {
+          // Get fresh video stream to avoid reference issues
+          const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          await this.setLocalStream(videoStream);
+        } else {
+          await this.setLocalStream(null);
+        }
+        return false;
+      } else {
+        // Turn on audio
+        const hasVideo = this.mediaState.video;
+        const constraints: MediaStreamConstraints = { audio: true };
+        if (hasVideo) {
+          constraints.video = true;
         }
 
-        this.mediaState.audio = true;
+        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        await this.setLocalStream(newStream);
         return true;
       }
-
-      // Toggle existing track
-      audioTrack.enabled = !audioTrack.enabled;
-      this.mediaState.audio = audioTrack.enabled;
-
-      // Notify peers about track state change
-      for (const [userId, pc] of this.peerConnections.entries()) {
-        const sender = pc.getSenders().find(s => s.track?.kind === 'audio');
-        if (sender) {
-          sender.track!.enabled = audioTrack.enabled;
-        }
-      }
-
-      return audioTrack.enabled;
     } catch (error) {
       console.error('Error toggling audio:', error);
       return this.mediaState.audio;
@@ -234,52 +199,8 @@ export class PeerConnectionManager {
 
     // Add local stream if available
     if (this.localStream) {
-      const tracks = this.localStream.getTracks();
-      const audioTracks = tracks.filter(t => t.kind === 'audio');
-      const videoTracks = tracks.filter(t => t.kind === 'video');
-
-      console.log('Preparing to add tracks:', {
-        totalTracks: tracks.length,
-        audioTracks: audioTracks.length,
-        videoTracks: videoTracks.length,
-      });
-
-      // Handle audio tracks first
-      if (audioTracks.length > 0) {
-        const audioTrack = audioTracks[0]; // Take the first audio track
-        audioTrack.enabled = true;
-
-        // Create a dedicated stream for audio
-        const audioStream = new MediaStream([audioTrack]);
-        const sender = peerConnection.addTrack(audioTrack, audioStream);
-
-        console.log('Audio track addition:', {
-          trackId: audioTrack.id,
-          senderCreated: !!sender,
-          trackState: {
-            enabled: audioTrack.enabled,
-            muted: audioTrack.muted,
-            readyState: audioTrack.readyState,
-          },
-        });
-
-        // Verify the track was actually added
-        const verifySender = peerConnection.getSenders().find(s => s.track?.id === audioTrack.id);
-        if (!verifySender) {
-          console.warn('Audio track not properly added - attempting fallback');
-          // Try adding with the original stream as a fallback
-          const fallbackSender = peerConnection.addTrack(audioTrack, this.localStream!);
-          console.log('Fallback audio sender created:', !!fallbackSender);
-        }
-      }
-
-      // Then add video tracks
-      videoTracks.forEach(track => {
-        const sender = peerConnection.addTrack(track, this.localStream!);
-        console.log('Video track addition:', {
-          trackId: track.id,
-          senderCreated: !!sender,
-        });
+      this.localStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, this.localStream!);
       });
     }
 
@@ -377,22 +298,6 @@ export class PeerConnectionManager {
 
     // Handle incoming streams
     peerConnection.ontrack = event => {
-      // Handle received audio tracks
-      if (event.track.kind === 'audio') {
-        // Force enable the track
-        event.track.enabled = true;
-
-        // Create a new MediaStream with just this track
-        const audioStream = new MediaStream([event.track]);
-
-        // Log the state before callback
-
-        // Immediately trigger callback with the audio stream
-        if (event.streams.length === 0) {
-          this.onStreamCallback(userId, audioStream);
-        }
-      }
-
       if (event.streams.length > 0) {
         const stream = event.streams[0];
         this.onStreamCallback(userId, stream);
