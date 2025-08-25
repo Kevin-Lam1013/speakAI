@@ -44,6 +44,7 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
     if (!roomId || !userId || !token) {
       return;
     }
+    console.log('[useWebRTC] init with', { roomId, userId: !!userId, hasToken: !!token });
 
     const config: WebRTCConfig = {
       iceServers: [
@@ -72,14 +73,17 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
       .connect(token)
       .then(() => {
         setIsConnected(true);
+        console.log('[useWebRTC] socket connected, joining room', roomId);
         return socketClient.joinRoom(roomId);
       })
       .catch(err => {
         setError(err.message);
         setIsConnected(false);
+        console.error('[useWebRTC] socket connect/join error', err);
       });
 
     return () => {
+      console.log('[useWebRTC] cleanup: closing connections and leaving room');
       peerManager.closeAllConnections();
       socketClient.leaveRoom(roomId).catch(console.error);
     };
@@ -96,11 +100,13 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
             setMediaState(initialMediaState);
 
             // Send initial media state to other participants
+            console.log('[useWebRTC] sending initial media state', initialMediaState);
             await socketClient.sendMediaState(initialMediaState);
             setIsInitialized(true);
           }
         } catch (err) {
           setError('Failed to initialize media');
+          console.error('[useWebRTC] initialize media error', err);
         }
       };
 
@@ -114,6 +120,7 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
 
     const unsubscribes = [
       socketClient.onParticipantJoined(async data => {
+        console.log('[useWebRTC] participant-joined', data);
         setParticipants(prev => [
           ...prev,
           { ...data, stream: undefined, mediaState: { video: false, audio: false } },
@@ -122,6 +129,7 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
         // Create and send offer to new participant (always create offer, even if no local stream)
         if (peerManagerRef.current) {
           const offer = await peerManagerRef.current.createOffer(data.userId);
+          console.log('[useWebRTC] sending offer to', data.userId);
           socketClient.sendSignal({
             type: 'offer',
             payload: offer,
@@ -131,10 +139,12 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
       }),
 
       socketClient.onParticipantLeft(data => {
+        console.log('[useWebRTC] participant-left', data);
         setParticipants(prev => prev.filter(p => p.userId !== data.userId));
       }),
 
       socketClient.onRoomParticipants(participants => {
+        console.log('[useWebRTC] room-participants', participants);
         setParticipants(
           participants.map(p => ({
             ...p,
@@ -145,16 +155,19 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
       }),
 
       socketClient.onMediaStateChange(data => {
+        console.log('[useWebRTC] media-state-change', data);
         setParticipants(prev =>
           prev.map(p => (p.userId === data.userId ? { ...p, mediaState: data.mediaState } : p))
         );
       }),
 
       socketClient.onSignal(async (data: SignalingMessage) => {
+        console.log('[useWebRTC] signal received', data.type, 'from', data.fromUserId);
         if (!peerManagerRef.current) return;
 
         const response = await peerManagerRef.current.handleSignalingMessage(data);
         if (response) {
+          console.log('[useWebRTC] sending response', response.type, 'to', data.fromUserId);
           socketClient.sendSignal({
             type: response.type as SignalingType,
             payload: response.payload,
@@ -172,6 +185,7 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
     if (!peerManagerRef.current) return;
 
     peerManagerRef.current.onIceCandidate = (targetUserId, candidate) => {
+      console.log('[useWebRTC] onIceCandidate -> sending', targetUserId);
       socketClient.sendSignal({
         type: 'ice-candidate',
         payload: candidate,
@@ -180,6 +194,7 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
     };
 
     peerManagerRef.current.onRenegotiationNeeded = (targetUserId, offer) => {
+      console.log('[useWebRTC] onRenegotiationNeeded -> sending offer to', targetUserId);
       socketClient.sendSignal({
         type: 'offer',
         payload: offer,
@@ -193,8 +208,13 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
       if (!peerManagerRef.current) return;
       const isOn = await peerManagerRef.current.toggleVideo();
       const newMediaState = { ...mediaState, video: isOn };
+      console.log('[useWebRTC] toggleCamera ->', newMediaState);
       setMediaState(newMediaState);
       const newLocalStream = peerManagerRef.current.getLocalStream();
+      console.log('[useWebRTC] localStream after camera toggle', {
+        audio: newLocalStream?.getAudioTracks().length || 0,
+        video: newLocalStream?.getVideoTracks().length || 0,
+      });
       setLocalStream(newLocalStream);
 
       // Ensure renegotiation callback is set
@@ -212,6 +232,7 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
       await socketClient.sendMediaState(newMediaState);
     } catch (err) {
       setError('Failed to access camera');
+      console.error('[useWebRTC] toggleCamera error', err);
     }
   }, [mediaState]);
 
@@ -220,8 +241,14 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
       if (!peerManagerRef.current) return;
       const isOn = await peerManagerRef.current.toggleAudio();
       const newMediaState = { ...mediaState, audio: isOn };
+      console.log('[useWebRTC] toggleAudio ->', newMediaState);
       setMediaState(newMediaState);
-      setLocalStream(peerManagerRef.current.getLocalStream());
+      const ls = peerManagerRef.current.getLocalStream();
+      console.log('[useWebRTC] localStream after audio toggle', {
+        audio: ls?.getAudioTracks().length || 0,
+        video: ls?.getVideoTracks().length || 0,
+      });
+      setLocalStream(ls);
 
       // Notify other participants of media state change
       await socketClient.sendMediaState(newMediaState);

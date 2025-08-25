@@ -74,6 +74,7 @@ export default function ParticipantVideo({
   isCameraOn = true,
 }: ParticipantVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number>();
@@ -82,12 +83,19 @@ export default function ParticipantVideo({
 
   // Initialize audio analysis
   useEffect(() => {
+    console.log('[ParticipantVideo] mount', name, {
+      hasStream: Boolean(stream),
+      isMuted,
+      audioTracks: stream?.getAudioTracks().length || 0,
+      videoTracks: stream?.getVideoTracks().length || 0,
+    });
     if (!stream || isMuted) {
       return;
     }
 
     const audioTrack = stream.getAudioTracks()[0];
     if (!audioTrack) {
+      console.warn('[ParticipantVideo] no audioTrack present', name);
       return;
     }
 
@@ -138,16 +146,74 @@ export default function ParticipantVideo({
         audioContextRef.current.close();
       }
       setIsSpeaking(false);
+      console.log('[ParticipantVideo] cleanup', name);
     };
   }, [stream, isMuted]);
 
+  // Attach media and react to tracks being added/removed on the same stream
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-    } else if (videoRef.current && !stream) {
-      videoRef.current.srcObject = null;
-    }
-  }, [stream, name]);
+    const attach = () => {
+      if (!stream) {
+        if (videoRef.current) videoRef.current.srcObject = null;
+        if (audioRef.current) audioRef.current.srcObject = null;
+        return;
+      }
+      const hasVideo = stream.getVideoTracks().length > 0;
+      const hasAudio = stream.getAudioTracks().length > 0;
+      console.log('[ParticipantVideo] attach stream to media element', name, {
+        isMuted,
+        audioTracks: stream.getAudioTracks().length,
+        videoTracks: stream.getVideoTracks().length,
+      });
+      // Always route audio to the hidden <audio> so audio is reliable even when video is present
+      if (audioRef.current) {
+        if (hasAudio) {
+          const audioOnly = new MediaStream(stream.getAudioTracks());
+          audioRef.current.srcObject = audioOnly;
+          audioRef.current.muted = isMuted;
+          audioRef.current.play?.().catch(() => {});
+        } else {
+          audioRef.current.srcObject = null;
+        }
+      }
+
+      // Attach only the video tracks to the <video> element
+      if (videoRef.current) {
+        if (hasVideo) {
+          const videoOnly = new MediaStream(stream.getVideoTracks());
+          videoRef.current.srcObject = videoOnly;
+          videoRef.current.muted = isMuted; // local tiles muted, remotes unmuted doesn't matter as audio is via <audio>
+          videoRef.current.play?.().catch(() => {});
+        } else {
+          videoRef.current.srcObject = null;
+        }
+      }
+
+      if (!hasAudio && !hasVideo) {
+        if (videoRef.current) videoRef.current.srcObject = null;
+        if (audioRef.current) audioRef.current.srcObject = null;
+      }
+    };
+
+    attach();
+
+    if (!stream) return;
+    const handleAdd = () => attach();
+    const handleRemove = () => attach();
+    stream.addEventListener?.('addtrack', handleAdd as EventListener);
+    stream.addEventListener?.('removetrack', handleRemove as EventListener);
+
+    return () => {
+      stream.removeEventListener?.('addtrack', handleAdd as EventListener);
+      stream.removeEventListener?.('removetrack', handleRemove as EventListener);
+    };
+  }, [stream, name, isMuted]);
+
+  // Keep muted state in sync if it changes later
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.muted = isMuted;
+    if (audioRef.current) audioRef.current.muted = isMuted;
+  }, [isMuted]);
 
   // Check if we have a video track in the stream
   const hasVideoTrack = stream?.getVideoTracks().length
@@ -211,6 +277,9 @@ export default function ParticipantVideo({
             </Box>
           </CameraOffPlaceholder>
         )}
+
+        {/* Hidden audio element to play audio when there is no video track */}
+        <audio ref={audioRef} style={{ display: 'none' }} />
 
         <NameOverlay>
           <Typography variant="body2" fontWeight={500}>

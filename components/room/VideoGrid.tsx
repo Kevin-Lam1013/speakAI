@@ -75,7 +75,7 @@ export default function VideoGrid({ participants, localParticipantId }: VideoGri
           <ParticipantVideo
             stream={participant.stream}
             name={participant.name}
-            isMuted={!participant.isAudioOn}
+            isMuted={participant.id === localParticipantId ? true : !participant.isAudioOn}
             isCameraOn={participant.isCameraOn}
           />
         </Box>
