@@ -99,13 +99,6 @@ app.prepare().then(async () => {
 
     // Handle WebRTC signaling
     socket.on('signal', data => {
-      try {
-        console.log('signal', {
-          from: socket.data.userId,
-          type: data?.type,
-          targetUserId: data?.targetUserId,
-        });
-      } catch {}
       const { type, payload, targetUserId } = data;
 
       // Find sockets for the target user in the same rooms as the sender
@@ -124,9 +117,6 @@ app.prepare().then(async () => {
 
     // Relay media state changes to room
     socket.on('media-state-change', mediaState => {
-      try {
-        console.log('media-state-change from', socket.data.userId, mediaState);
-      } catch {}
       const rooms = Array.from(socket.rooms).filter(room => room !== socket.id);
       rooms.forEach(roomId => {
         socket.to(roomId).emit('media-state-change', {

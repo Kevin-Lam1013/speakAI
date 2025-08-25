@@ -84,21 +84,12 @@ export default function ParticipantVideo({
 
   // Initialize audio analysis
   useEffect(() => {
-    console.log('[ParticipantVideo] mount', name, {
-      hasStream: Boolean(stream),
-      isMuted,
-      audioTracks: stream?.getAudioTracks().length || 0,
-      videoTracks: stream?.getVideoTracks().length || 0,
-    });
     if (!stream || isMuted) {
       return;
     }
 
     const audioTrack = stream.getAudioTracks()[0];
-    if (!audioTrack) {
-      console.warn('[ParticipantVideo] no audioTrack present', name);
-      return;
-    }
+    if (!audioTrack) return;
 
     // Create audio context and analyzer
     const audioContext = new AudioContext();
@@ -147,7 +138,6 @@ export default function ParticipantVideo({
         audioContextRef.current.close();
       }
       setIsSpeaking(false);
-      console.log('[ParticipantVideo] cleanup', name);
     };
   }, [stream, isMuted]);
 
@@ -167,11 +157,7 @@ export default function ParticipantVideo({
       const hasVideo = liveVideoTracks.length > 0;
       const hasAudio = liveAudioTracks.length > 0;
       setHasVideo(hasVideo);
-      console.log('[ParticipantVideo] attach stream to media element', name, {
-        isMuted,
-        audioTracks: liveAudioTracks.length,
-        videoTracks: liveVideoTracks.length,
-      });
+
       // Always route audio to the hidden <audio> so audio is reliable even when video is present
       if (audioRef.current) {
         if (hasAudio) {

@@ -36,11 +36,6 @@ export class PeerConnectionManager {
   }
 
   async setLocalStream(stream: MediaStream | null) {
-    console.log('[PCM] setLocalStream:start', {
-      hasStream: Boolean(stream),
-      audioTracks: stream?.getAudioTracks().length || 0,
-      videoTracks: stream?.getVideoTracks().length || 0,
-    });
     // Stop old tracks if they exist
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => track.stop());
@@ -55,34 +50,25 @@ export class PeerConnectionManager {
       if (stream) {
         const videoTrack = stream.getVideoTracks()[0];
         const audioTrack = stream.getAudioTracks()[0];
-        console.log('[PCM] updating senders for user', userId, {
-          hasAudioTrack: Boolean(audioTrack),
-          hasVideoTrack: Boolean(videoTrack),
-          senderKinds: senders.map(s => s.track?.kind),
-        });
 
         // Replace or add video track
         const videoSender = senders.find(s => s.track?.kind === 'video');
         if (videoSender && videoTrack) {
           try {
             await videoSender.replaceTrack(videoTrack);
-            console.log('[PCM] video replaceTrack OK', userId);
           } catch (e) {
             console.warn('Failed to replace video track, removing and adding:', e);
             pc.removeTrack(videoSender);
             pc.addTrack(videoTrack, stream);
-            console.log('[PCM] video remove+add', userId);
           }
         } else if (videoTrack && !videoSender) {
           pc.addTrack(videoTrack, stream);
           // Need to renegotiate when adding new tracks
           this.triggerRenegotiation(userId);
-          console.log('[PCM] video addTrack + renegotiate', userId);
         } else if (videoSender && !videoTrack) {
           pc.removeTrack(videoSender);
           // Trigger renegotiation when removing tracks too
           this.triggerRenegotiation(userId);
-          console.log('[PCM] video removeTrack + renegotiate', userId);
         }
 
         // Replace or add audio track
@@ -90,23 +76,19 @@ export class PeerConnectionManager {
         if (audioSender && audioTrack) {
           try {
             await audioSender.replaceTrack(audioTrack);
-            console.log('[PCM] audio replaceTrack OK', userId);
           } catch (e) {
             console.warn('Failed to replace audio track, removing and adding:', e);
             pc.removeTrack(audioSender);
             pc.addTrack(audioTrack, stream);
-            console.log('[PCM] audio remove+add', userId);
           }
         } else if (audioTrack && !audioSender) {
           pc.addTrack(audioTrack, stream);
           // Need to renegotiate when adding new tracks
           this.triggerRenegotiation(userId);
-          console.log('[PCM] audio addTrack + renegotiate', userId);
         } else if (audioSender && !audioTrack) {
           pc.removeTrack(audioSender);
           // Trigger renegotiation when removing tracks too
           this.triggerRenegotiation(userId);
-          console.log('[PCM] audio removeTrack + renegotiate', userId);
         }
       } else {
         // Remove all tracks if no stream
@@ -117,7 +99,6 @@ export class PeerConnectionManager {
         });
         // Trigger renegotiation when removing all tracks
         this.triggerRenegotiation(userId);
-        console.log('[PCM] removed all tracks + renegotiate', userId);
       }
     }
 
@@ -130,7 +111,6 @@ export class PeerConnectionManager {
     } else {
       this.mediaState = { video: false, audio: false };
     }
-    console.log('[PCM] setLocalStream:end mediaState', this.mediaState);
   }
 
   private triggerRenegotiation(userId: string) {
@@ -144,7 +124,6 @@ export class PeerConnectionManager {
           if (this.onRenegotiationNeeded) {
             this.onRenegotiationNeeded(userId, offer);
           }
-          console.log('[PCM] triggerRenegotiation -> offer sent', userId);
         } catch (error) {
           console.error('Failed to renegotiate after adding track:', error);
         }
@@ -165,7 +144,7 @@ export class PeerConnectionManager {
         } else {
           await this.setLocalStream(null);
         }
-        console.log('[PCM] toggleVideo:off');
+
         return false;
       } else {
         // Turn on video
@@ -177,7 +156,7 @@ export class PeerConnectionManager {
 
         const newStream = await navigator.mediaDevices.getUserMedia(constraints);
         await this.setLocalStream(newStream);
-        console.log('[PCM] toggleVideo:on');
+
         return true;
       }
     } catch (error) {
@@ -199,7 +178,7 @@ export class PeerConnectionManager {
         } else {
           await this.setLocalStream(null);
         }
-        console.log('[PCM] toggleAudio:off');
+
         return false;
       } else {
         // Turn on audio
@@ -211,7 +190,7 @@ export class PeerConnectionManager {
 
         const newStream = await navigator.mediaDevices.getUserMedia(constraints);
         await this.setLocalStream(newStream);
-        console.log('[PCM] toggleAudio:on');
+
         return true;
       }
     } catch (error) {
@@ -225,10 +204,6 @@ export class PeerConnectionManager {
 
     // Add local stream if available
     if (this.localStream) {
-      console.log('[PCM] createOffer: adding local tracks to PC', targetUserId, {
-        audio: this.localStream.getAudioTracks().length,
-        video: this.localStream.getVideoTracks().length,
-      });
       this.localStream.getTracks().forEach(track => {
         peerConnection.addTrack(track, this.localStream!);
       });
@@ -256,7 +231,6 @@ export class PeerConnectionManager {
         const offer = new RTCSessionDescription(payload);
         const hasVideoInOffer = offer.sdp?.includes('m=video') && !offer.sdp?.includes('m=video 0');
         const hasAudioInOffer = offer.sdp?.includes('m=audio') && !offer.sdp?.includes('m=audio 0');
-        console.log('[PCM] handle offer from', fromUserId, { hasAudioInOffer, hasVideoInOffer });
 
         await peerConnection.setRemoteDescription(offer);
 
@@ -264,10 +238,6 @@ export class PeerConnectionManager {
 
         // Add local stream to the answer if available
         if (this.localStream) {
-          console.log('[PCM] handle offer: ensure local tracks present for answer', fromUserId, {
-            audio: this.localStream.getAudioTracks().length,
-            video: this.localStream.getVideoTracks().length,
-          });
           this.localStream.getTracks().forEach(track => {
             const sender = peerConnection.getSenders().find(s => s.track?.kind === track.kind);
             if (!sender) {
@@ -278,7 +248,7 @@ export class PeerConnectionManager {
 
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
-        console.log('[PCM] sending answer to', fromUserId);
+
         return {
           type: 'answer',
           payload: answer,
@@ -286,13 +256,11 @@ export class PeerConnectionManager {
         };
 
       case 'answer':
-        console.log('[PCM] handle answer from', fromUserId);
         await peerConnection.setRemoteDescription(new RTCSessionDescription(payload));
         break;
 
       case 'ice-candidate':
         if (payload) {
-          console.log('[PCM] addIceCandidate from', fromUserId);
           await peerConnection.addIceCandidate(new RTCIceCandidate(payload));
         }
         break;
@@ -315,12 +283,6 @@ export class PeerConnectionManager {
 
     // Handle incoming tracks; merge into a single MediaStream per user
     peerConnection.ontrack = event => {
-      console.log('[PCM] ontrack', userId, {
-        numStreams: event.streams.length,
-        trackKind: event.track.kind,
-        readyState: event.track.readyState,
-        muted: event.track.muted,
-      });
       const existing = this.remoteStreams.get(userId) || new MediaStream();
       // Add track to the aggregated stream if not already present
       const alreadyHas = existing.getTracks().some(t => t.id === event.track.id);
@@ -334,7 +296,6 @@ export class PeerConnectionManager {
 
       // Listen for track ended events
       event.track.addEventListener('ended', () => {
-        console.log('[PCM] track ended', userId, event.track.kind);
         const agg = this.remoteStreams.get(userId);
         if (agg) {
           agg.getTracks().forEach(t => {
@@ -352,7 +313,6 @@ export class PeerConnectionManager {
 
       // Also listen for track mute/unmute
       event.track.addEventListener('mute', () => {
-        console.log('[PCM] track mute', userId, event.track.kind);
         const agg = this.remoteStreams.get(userId);
         if (agg) {
           const emitted3 = new MediaStream(agg.getTracks());
@@ -361,7 +321,6 @@ export class PeerConnectionManager {
       });
 
       event.track.addEventListener('unmute', () => {
-        console.log('[PCM] track unmute', userId, event.track.kind);
         const agg = this.remoteStreams.get(userId);
         if (agg) {
           const emitted4 = new MediaStream(agg.getTracks());
@@ -372,7 +331,6 @@ export class PeerConnectionManager {
 
     // Handle connection state changes
     peerConnection.onconnectionstatechange = () => {
-      console.log('[PCM] connectionState', userId, peerConnection.connectionState);
       if (
         peerConnection.connectionState === 'disconnected' ||
         peerConnection.connectionState === 'failed'
