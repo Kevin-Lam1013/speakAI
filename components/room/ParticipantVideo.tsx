@@ -74,6 +74,7 @@ export default function ParticipantVideo({
   isCameraOn = true,
 }: ParticipantVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number>();
@@ -142,12 +143,31 @@ export default function ParticipantVideo({
   }, [stream, isMuted]);
 
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-    } else if (videoRef.current && !stream) {
-      videoRef.current.srcObject = null;
+    if (!stream) {
+      if (videoRef.current) videoRef.current.srcObject = null;
+      if (audioRef.current) audioRef.current.srcObject = null;
+      return;
     }
-  }, [stream, name]);
+
+    // Handle video stream
+    if (videoRef.current) {
+      // Create a new stream with only video tracks
+      const videoStream = new MediaStream(stream.getVideoTracks());
+      videoRef.current.srcObject = videoStream;
+    }
+
+    // Handle audio stream
+    if (audioRef.current && !isMuted) {
+      // Create a new stream with only audio tracks
+      const audioStream = new MediaStream(stream.getAudioTracks());
+      audioRef.current.srcObject = audioStream;
+
+      // Ensure audio plays
+      audioRef.current.play().catch(error => {
+        console.error('Error playing audio:', error);
+      });
+    }
+  }, [stream, name, isMuted]);
 
   // Check if we have a video track in the stream
   const hasVideoTrack = stream?.getVideoTracks().length
@@ -175,8 +195,11 @@ export default function ParticipantVideo({
       style={{ height: '100%' }}
     >
       <VideoContainer isSpeaking={isSpeaking}>
+        {/* Hidden audio element for remote participants */}
+        <audio ref={audioRef} autoPlay playsInline />
+
         {showVideo ? (
-          <Video ref={videoRef} autoPlay playsInline muted={isMuted} />
+          <Video ref={videoRef} autoPlay playsInline muted />
         ) : (
           <CameraOffPlaceholder>
             <Avatar

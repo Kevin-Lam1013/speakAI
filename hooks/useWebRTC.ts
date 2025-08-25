@@ -91,9 +91,17 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
       const initializeMedia = async () => {
         try {
           if (peerManagerRef.current) {
-            // Start with camera and mic off by default
+            // Request audio permissions upfront but keep it disabled
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const audioTrack = stream.getAudioTracks()[0];
+            audioTrack.enabled = false; // Start muted but with permissions granted
+
             const initialMediaState = { video: false, audio: false };
             setMediaState(initialMediaState);
+
+            // Set the initial stream in the peer manager
+            await peerManagerRef.current.setLocalStream(stream);
+            setLocalStream(stream);
 
             // Send initial media state to other participants
             await socketClient.sendMediaState(initialMediaState);
