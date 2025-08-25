@@ -160,18 +160,22 @@ export default function ParticipantVideo({
         setHasVideo(false);
         return;
       }
-      const hasVideo = stream.getVideoTracks().length > 0;
-      const hasAudio = stream.getAudioTracks().length > 0;
+      const liveVideoTracks = stream
+        .getVideoTracks()
+        .filter(t => t.readyState === 'live' && !t.muted);
+      const liveAudioTracks = stream.getAudioTracks().filter(t => t.readyState === 'live');
+      const hasVideo = liveVideoTracks.length > 0;
+      const hasAudio = liveAudioTracks.length > 0;
       setHasVideo(hasVideo);
       console.log('[ParticipantVideo] attach stream to media element', name, {
         isMuted,
-        audioTracks: stream.getAudioTracks().length,
-        videoTracks: stream.getVideoTracks().length,
+        audioTracks: liveAudioTracks.length,
+        videoTracks: liveVideoTracks.length,
       });
       // Always route audio to the hidden <audio> so audio is reliable even when video is present
       if (audioRef.current) {
         if (hasAudio) {
-          const audioOnly = new MediaStream(stream.getAudioTracks());
+          const audioOnly = new MediaStream(liveAudioTracks);
           audioRef.current.srcObject = audioOnly;
           audioRef.current.muted = isMuted;
           audioRef.current.play?.().catch(() => {});
@@ -183,7 +187,7 @@ export default function ParticipantVideo({
       // Attach only the video tracks to the <video> element
       if (videoRef.current) {
         if (hasVideo) {
-          const videoOnly = new MediaStream(stream.getVideoTracks());
+          const videoOnly = new MediaStream(liveVideoTracks);
           videoRef.current.srcObject = videoOnly;
           videoRef.current.muted = isMuted; // local tiles muted, remotes unmuted doesn't matter as audio is via <audio>
           videoRef.current.play?.().catch(() => {});
