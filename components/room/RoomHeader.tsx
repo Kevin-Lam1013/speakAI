@@ -53,7 +53,7 @@ export default function RoomHeader({
           {roomName}
         </Typography>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box display="flex" alignItems="center" gap={2}>
           <ParticipantCount>
             <Typography variant="body2" color="text.secondary">
               {participantCount} {participantCount === 1 ? 'Participant' : 'Participants'}

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { verifyAccessToken } from '@/lib/jwt';
 
-export async function POST(request: NextRequest, { params }: { params: { inviteCode: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: { inviteCode: string } }) {
   try {
     // Verify user is authenticated
     const accessToken = request.cookies.get('accessToken')?.value;

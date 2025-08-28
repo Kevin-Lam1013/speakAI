@@ -1,4 +1,4 @@
-import { Box, Container, Paper, useTheme, styled } from '@mui/material';
+import { Box, Container, Paper, styled } from '@mui/material';
 import { motion } from 'framer-motion';
 import { statistics, supportedLanguages } from '@/constants/features';
 import AnimatedText from '@/components/shared/AnimatedText';

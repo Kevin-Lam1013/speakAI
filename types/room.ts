@@ -16,7 +16,3 @@ export interface RoomParticipant {
   userId: string;
   joinedAt: string;
 }
-
-export interface CreateRoomData {
-  name: string;
-}

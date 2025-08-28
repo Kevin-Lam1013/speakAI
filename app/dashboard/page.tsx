@@ -7,7 +7,7 @@ import AddIcon from '@mui/icons-material/Add';
 import RoomCard from '@/components/room/RoomCard';
 import CreateRoomModal from '@/components/room/CreateRoomModal';
 import EmptyRoomState from '@/components/room/EmptyRoomState';
-import { Room, CreateRoomData } from '@/types/room';
+import { Room } from '@/types/room';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -35,14 +35,14 @@ export default function DashboardPage() {
     }
   };
 
-  const handleCreateRoom = async (data: CreateRoomData) => {
+  const handleCreateRoom = async (name: string) => {
     try {
       const response = await fetch('/api/rooms', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ name }),
       });
 
       if (!response.ok) throw new Error('Failed to create room');
@@ -50,7 +50,7 @@ export default function DashboardPage() {
       const result = await response.json();
       if (result.success && result.room) {
         // Redirect to the room page using the invite code
-        router.push(`/room/${result.room.inviteCode}`);
+        router.push(`/rooms/${result.room.inviteCode}`);
       } else {
         throw new Error('Invalid response format');
       }
@@ -114,8 +114,8 @@ export default function DashboardPage() {
         } else {
           throw new Error('Invalid user data format');
         }
-      } catch (err) {
-        if (err.name === 'AbortError') return;
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') return;
         console.error('Failed to fetch user:', err);
         setError('Failed to load user data. Please try again later.');
       }
@@ -142,8 +142,8 @@ export default function DashboardPage() {
         } else {
           throw new Error('Invalid response format');
         }
-      } catch (err) {
-        if (err.name === 'AbortError') return;
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') return;
         setError('Failed to load rooms. Please try again later.');
         console.error('Error fetching rooms:', err);
       } finally {

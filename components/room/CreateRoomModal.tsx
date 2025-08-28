@@ -9,17 +9,16 @@ import {
   Box,
   CircularProgress,
 } from '@mui/material';
-import { CreateRoomData } from '@/types/room';
 
 interface CreateRoomModalProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (data: CreateRoomData) => Promise<void>;
+  onSubmit: (name: string) => Promise<void>;
 }
 
 export default function CreateRoomModal({ open, onClose, onSubmit }: CreateRoomModalProps) {
   const [name, setName] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inProgress, setInProgress] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,14 +30,14 @@ export default function CreateRoomModal({ open, onClose, onSubmit }: CreateRoomM
       return;
     }
 
-    setIsSubmitting(true);
+    setInProgress(true);
     try {
-      await onSubmit({ name: name.trim() });
+      await onSubmit(name.trim());
       handleClose();
     } catch (err) {
       setError('Failed to create room. Please try again.');
     } finally {
-      setIsSubmitting(false);
+      setInProgress(false);
     }
   };
 
@@ -62,20 +61,20 @@ export default function CreateRoomModal({ open, onClose, onSubmit }: CreateRoomM
               onChange={e => setName(e.target.value)}
               error={!!error}
               helperText={error}
-              disabled={isSubmitting}
+              disabled={inProgress}
               placeholder="Enter a name for your room"
             />
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleClose} disabled={isSubmitting}>
+          <Button onClick={handleClose} disabled={inProgress}>
             Cancel
           </Button>
           <Button
             type="submit"
             variant="contained"
-            disabled={isSubmitting}
-            startIcon={isSubmitting ? <CircularProgress size={20} /> : null}
+            disabled={inProgress}
+            startIcon={inProgress ? <CircularProgress size={20} /> : null}
           >
             Create Room
           </Button>

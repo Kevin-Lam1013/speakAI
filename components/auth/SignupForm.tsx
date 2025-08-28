@@ -15,8 +15,7 @@ import {
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import Visibility from '@mui/icons-material/Visibility';
-import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import { Visibility, VisibilityOff } from '@mui/icons-material';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(4),
@@ -141,6 +140,14 @@ export default function SignupForm() {
       ...prev,
       [name]: value,
     }));
+  };
+
+  const handleLoginLinkOnClick = () => {
+    // Preserve redirect URL when going to login
+    const params = new URLSearchParams(window.location.search);
+    const redirectUrl = params.get('redirect');
+    const loginUrl = redirectUrl ? `/login?redirect=${encodeURIComponent(redirectUrl)}` : '/login';
+    router.push(loginUrl);
   };
 
   return (
@@ -310,15 +317,7 @@ export default function SignupForm() {
               <Link
                 component="button"
                 variant="body2"
-                onClick={() => {
-                  // Preserve redirect URL when going to login
-                  const params = new URLSearchParams(window.location.search);
-                  const redirectUrl = params.get('redirect');
-                  const loginUrl = redirectUrl
-                    ? `/login?redirect=${encodeURIComponent(redirectUrl)}`
-                    : '/login';
-                  router.push(loginUrl);
-                }}
+                onClick={handleLoginLinkOnClick}
                 sx={{
                   fontWeight: 'bold',
                   color: theme =>

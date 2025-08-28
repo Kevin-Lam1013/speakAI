@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { Container } from '@mui/material';
 import VideoGrid from '@/components/room/VideoGrid';
 import RoomControls from '@/components/room/RoomControls';
@@ -9,12 +9,6 @@ import RoomHeader from '@/components/room/RoomHeader';
 import LoadingState from '@/components/shared/LoadingState';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { socketClient } from '@/lib/socket/client';
-
-interface RoomPageProps {
-  params: {
-    inviteCode: string;
-  };
-}
 
 interface RoomData {
   id: string;
@@ -31,8 +25,9 @@ interface Participant {
   isAudioOn?: boolean;
 }
 
-export default function RoomPage({ params }: RoomPageProps) {
+export default function RoomPage() {
   const router = useRouter();
+  const { inviteCode } = useParams<{ inviteCode: string }>();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [room, setRoom] = useState<RoomData>();
@@ -44,7 +39,7 @@ export default function RoomPage({ params }: RoomPageProps) {
     const fetchData = async () => {
       try {
         // Get room details
-        const roomResponse = await fetch(`/api/rooms/${params.inviteCode}`);
+        const roomResponse = await fetch(`/api/rooms/${inviteCode}`);
         if (!roomResponse.ok) {
           throw new Error('Room not found or has ended');
         }
@@ -74,7 +69,7 @@ export default function RoomPage({ params }: RoomPageProps) {
     };
 
     fetchData();
-  }, [params.inviteCode]);
+  }, [inviteCode]);
 
   // Initialize WebRTC once we have the room and user info
   const {
@@ -89,6 +84,15 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   const handleLeaveRoom = async () => {
     try {
+      // Inform server via HTTP to mark participant as left
+      if (inviteCode) {
+        try {
+          await fetch(`/api/rooms/${inviteCode}/leave`, { method: 'PUT' });
+        } catch (e) {
+          // Non-blocking: proceed even if HTTP call fails
+        }
+      }
+
       await socketClient.leaveRoom(room?.id || '');
       router.push('/dashboard');
     } catch (err) {
@@ -98,7 +102,7 @@ export default function RoomPage({ params }: RoomPageProps) {
 
   const handleEndRoom = async () => {
     try {
-      const response = await fetch(`/api/rooms/${params.inviteCode}/end`, {
+      const response = await fetch(`/api/rooms/${inviteCode}/end`, {
         method: 'PUT',
       });
       if (response.ok) {
@@ -117,6 +121,7 @@ export default function RoomPage({ params }: RoomPageProps) {
     return <LoadingState message={error || 'Room not found'} />;
   }
 
+  // TODO: Create an error page instead of this ???
   if (webRTCError) {
     return <LoadingState message={`Connection error: ${webRTCError}`} />;
   }

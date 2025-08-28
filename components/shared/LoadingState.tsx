@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, CircularProgress, Typography, useTheme, styled } from '@mui/material';
+import { Box, CircularProgress, Typography, styled } from '@mui/material';
 import { motion } from 'framer-motion';
 
 const LoadingContainer = styled(Box)(({ theme }) => ({
@@ -20,8 +20,6 @@ interface LoadingStateProps {
 }
 
 export default function LoadingState({ message = 'Loading...' }: LoadingStateProps) {
-  const theme = useTheme();
-
   return (
     <LoadingContainer>
       <motion.div
@@ -29,27 +27,14 @@ export default function LoadingState({ message = 'Loading...' }: LoadingStatePro
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
       >
-        <CircularProgress
-          size={60}
-          thickness={4}
-          sx={{
-            color: theme.palette.primary.main,
-          }}
-        />
+        <CircularProgress size={60} thickness={4} color="primary" />
       </motion.div>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
       >
-        <Typography
-          variant="h6"
-          color="text.secondary"
-          sx={{
-            textAlign: 'center',
-            fontWeight: 500,
-          }}
-        >
+        <Typography variant="h6" color="text.secondary" textAlign="center" fontWeight={500}>
           {message}
         </Typography>
       </motion.div>

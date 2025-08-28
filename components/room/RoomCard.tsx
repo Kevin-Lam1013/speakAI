@@ -9,11 +9,26 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  styled,
 } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import StopIcon from '@mui/icons-material/Stop';
+
+const StyledCard = styled(Card)(({ theme }) => ({
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column',
+  position: 'relative',
+  '&:hover': {
+    boxShadow: theme.shadows[6],
+  },
+}));
+
+const StyledCardContent = styled(CardContent)({
+  flexGrow: 1,
+});
 
 interface RoomCardProps {
   room: Room;
@@ -26,14 +41,14 @@ export default function RoomCard({ room, isCreator, onEndRoom }: RoomCardProps) 
   const [copyTooltip, setCopyTooltip] = useState('Copy Invite Link');
 
   const handleCopyInvite = async () => {
-    const inviteLink = `${window.location.origin}/room/${room.inviteCode}`;
+    const inviteLink = `${window.location.origin}/rooms/${room.inviteCode}`;
     await navigator.clipboard.writeText(inviteLink);
     setCopyTooltip('Copied!');
     setTimeout(() => setCopyTooltip('Copy Invite Link'), 2000);
   };
 
   const handleJoinRoom = () => {
-    router.push(`/room/${room.inviteCode}`);
+    router.push(`/rooms/${room.inviteCode}`);
   };
 
   const formattedDate = new Date(room.createdAt).toLocaleDateString('en-US', {
@@ -43,18 +58,8 @@ export default function RoomCard({ room, isCreator, onEndRoom }: RoomCardProps) 
   });
 
   return (
-    <Card
-      sx={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative',
-        '&:hover': {
-          boxShadow: 6,
-        },
-      }}
-    >
-      <CardContent sx={{ flexGrow: 1 }}>
+    <StyledCard>
+      <StyledCardContent>
         <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
           <Typography variant="h6" component="h2" noWrap>
             {room.name}
@@ -102,7 +107,7 @@ export default function RoomCard({ room, isCreator, onEndRoom }: RoomCardProps) 
             </>
           )}
         </Box>
-      </CardContent>
-    </Card>
+      </StyledCardContent>
+    </StyledCard>
   );
 }

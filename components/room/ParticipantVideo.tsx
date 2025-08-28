@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Typography, useTheme, styled, Avatar } from '@mui/material';
+import { Box, Typography, styled, Avatar } from '@mui/material';
 import VideocamOffIcon from '@mui/icons-material/VideocamOff';
 import MicIcon from '@mui/icons-material/Mic';
 import MicOffIcon from '@mui/icons-material/MicOff';
@@ -78,6 +78,20 @@ const CameraOffPlaceholder = styled(Box)(({ theme }) => ({
   color: theme.palette.mode === 'dark' ? 'rgba(148, 163, 184, 0.8)' : 'rgba(100, 116, 139, 0.8)',
 }));
 
+const InitialsAvatar = styled(Avatar)(({ theme }) => ({
+  width: 80,
+  height: 80,
+  fontSize: '2rem',
+  fontWeight: 600,
+  marginBottom: theme.spacing(2),
+  backgroundColor:
+    theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.2)',
+  color: theme.palette.mode === 'dark' ? 'rgba(147, 197, 253, 0.9)' : 'rgba(37, 99, 235, 0.8)',
+  border: `2px solid ${
+    theme.palette.mode === 'dark' ? 'rgba(147, 197, 253, 0.3)' : 'rgba(59, 130, 246, 0.3)'
+  }`,
+}));
+
 interface ParticipantVideoProps {
   stream?: MediaStream;
   name: string;
@@ -100,7 +114,6 @@ export default function ParticipantVideo({
   const animationFrameRef = useRef<number>();
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [hasVideo, setHasVideo] = useState<boolean>(Boolean(stream?.getVideoTracks().length));
-  const theme = useTheme();
 
   // Initialize audio analysis
   useEffect(() => {
@@ -259,31 +272,8 @@ export default function ParticipantVideo({
         />
         {!showVideo && (
           <CameraOffPlaceholder>
-            <Avatar
-              sx={{
-                width: 80,
-                height: 80,
-                fontSize: '2rem',
-                fontWeight: 600,
-                mb: 2,
-                backgroundColor:
-                  theme.palette.mode === 'dark'
-                    ? 'rgba(59, 130, 246, 0.3)'
-                    : 'rgba(59, 130, 246, 0.2)',
-                color:
-                  theme.palette.mode === 'dark'
-                    ? 'rgba(147, 197, 253, 0.9)'
-                    : 'rgba(37, 99, 235, 0.8)',
-                border: `2px solid ${
-                  theme.palette.mode === 'dark'
-                    ? 'rgba(147, 197, 253, 0.3)'
-                    : 'rgba(59, 130, 246, 0.3)'
-                }`,
-              }}
-            >
-              {getInitials(name)}
-            </Avatar>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <InitialsAvatar>{getInitials(name)}</InitialsAvatar>
+            <Box display="flex" alignItems="center" gap={1}>
               <VideocamOffIcon sx={{ fontSize: '1.2rem', opacity: 0.7 }} />
               <Typography variant="body2" sx={{ opacity: 0.8 }}>
                 Camera is off
