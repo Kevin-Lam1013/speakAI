@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyRefreshToken, generateAccessToken } from '@/lib/authTokens';
 import { query } from '@/lib/db';
+import { cleanExpiredTokens } from '@/lib/tokenService';
 
 export async function POST(request: NextRequest) {
   try {
@@ -46,6 +47,9 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
+
+    // Opportunistic cleanup of expired refresh tokens (non-blocking)
+    cleanExpiredTokens().catch(() => {});
 
     // Get user info
     const userResult = await query(
