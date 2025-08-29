@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createRoomSchema } from '@/lib/validations/room';
 import { generateUniqueInviteCode } from '@/lib/utils/inviteCode';
 import { query } from '@/lib/db';
-import { verifyAccessToken } from '@/lib/jwt';
+import { verifyAccessToken } from '@/lib/authTokens';
 import { ZodError } from 'zod';
 
 export async function GET(request: NextRequest) {

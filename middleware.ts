@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAccessToken } from '@/lib/jwt';
+import { verifyAccessToken } from '@/lib/authTokens';
 
 // Define protected and auth routes
 const protectedRoutes = ['/dashboard', '/room'];

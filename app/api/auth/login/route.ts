@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { loginSchema } from '@/lib/validations';
 import { verifyPassword } from '@/lib/password';
-import { generateAccessToken, generateRefreshToken } from '@/lib/jwt';
+import { generateAccessToken, generateRefreshToken } from '@/lib/authTokens';
 import { query } from '@/lib/db';
 import { AuthResponse } from '@/types/auth';
 import { hashPassword } from '@/lib/password';

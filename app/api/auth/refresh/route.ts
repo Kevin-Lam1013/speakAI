@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyRefreshToken, generateAccessToken } from '@/lib/auth';
+import { verifyRefreshToken, generateAccessToken } from '@/lib/authTokens';
 import { query } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     // Verify refresh token
     let decoded;
     try {
-      decoded = verifyRefreshToken(refreshToken);
+      decoded = await verifyRefreshToken(refreshToken);
     } catch (error) {
       return NextResponse.json(
         {
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     const user = userResult.rows[0];
 
     // Generate new access token
-    const accessToken = generateAccessToken({
+    const accessToken = await generateAccessToken({
       userId: user.id,
       email: user.email,
     });
