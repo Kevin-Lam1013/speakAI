@@ -1,5 +1,3 @@
-import { AuthResponse } from '@/types/auth';
-
 interface FetchOptions extends RequestInit {
   skipAuth?: boolean;
 }

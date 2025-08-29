@@ -9,6 +9,7 @@ import RoomHeader from '@/components/room/RoomHeader';
 import LoadingState from '@/components/shared/LoadingState';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { socketClient } from '@/lib/socket/client';
+import { api } from '@/lib/api';
 
 interface RoomData {
   id: string;
@@ -39,7 +40,7 @@ export default function RoomPage() {
     const fetchData = async () => {
       try {
         // Get room details
-        const roomResponse = await fetch(`/api/rooms/${inviteCode}`);
+        const roomResponse = await api.get(`/api/rooms/${inviteCode}`);
         if (!roomResponse.ok) {
           throw new Error('Room not found or has ended');
         }
@@ -47,7 +48,7 @@ export default function RoomPage() {
         setRoom(roomData.room);
 
         // Get current user info
-        const userResponse = await fetch('/api/auth/me');
+        const userResponse = await api.get('/api/auth/me');
         if (!userResponse.ok) {
           throw new Error('Failed to get user info');
         }
@@ -55,7 +56,7 @@ export default function RoomPage() {
         setUserId(userData.id);
 
         // Get access token for socket authentication
-        const tokenResponse = await fetch('/api/auth/token');
+        const tokenResponse = await api.get('/api/auth/token');
         if (!tokenResponse.ok) {
           throw new Error('Failed to get access token');
         }
@@ -87,7 +88,7 @@ export default function RoomPage() {
       // Inform server via HTTP to mark participant as left
       if (inviteCode) {
         try {
-          await fetch(`/api/rooms/${inviteCode}/leave`, { method: 'PUT' });
+          await api.put(`/api/rooms/${inviteCode}/leave`);
         } catch (e) {
           // Non-blocking: proceed even if HTTP call fails
         }
@@ -102,9 +103,7 @@ export default function RoomPage() {
 
   const handleEndRoom = async () => {
     try {
-      const response = await fetch(`/api/rooms/${inviteCode}/end`, {
-        method: 'PUT',
-      });
+      const response = await api.put(`/api/rooms/${inviteCode}/end`);
       if (response.ok) {
         handleLeaveRoom();
       }

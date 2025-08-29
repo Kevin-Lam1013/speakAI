@@ -8,6 +8,7 @@ import RoomCard from '@/components/room/RoomCard';
 import CreateRoomModal from '@/components/room/CreateRoomModal';
 import EmptyRoomState from '@/components/room/EmptyRoomState';
 import { Room } from '@/types/room';
+import { api } from '@/lib/api';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -19,7 +20,7 @@ export default function DashboardPage() {
 
   const fetchRooms = async () => {
     try {
-      const response = await fetch('/api/rooms');
+      const response = await api.get('/api/rooms');
       if (!response.ok) throw new Error('Failed to fetch rooms');
       const data = await response.json();
       if (Array.isArray(data)) {
@@ -37,13 +38,7 @@ export default function DashboardPage() {
 
   const handleCreateRoom = async (name: string) => {
     try {
-      const response = await fetch('/api/rooms', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name }),
-      });
+      const response = await api.post('/api/rooms', { name });
 
       if (!response.ok) throw new Error('Failed to create room');
 
@@ -62,9 +57,7 @@ export default function DashboardPage() {
 
   const handleEndRoom = async (inviteCode: string) => {
     try {
-      const response = await fetch(`/api/rooms/${inviteCode}/end`, {
-        method: 'PUT',
-      });
+      const response = await api.put(`/api/rooms/${inviteCode}/end`);
 
       if (!response.ok) {
         throw new Error('Failed to end room');
@@ -80,9 +73,7 @@ export default function DashboardPage() {
 
   const handleLogout = async () => {
     try {
-      const response = await fetch('/api/auth/logout', {
-        method: 'POST',
-      });
+      const response = await api.post('/api/auth/logout');
 
       if (response.ok) {
         router.push('/');
@@ -98,7 +89,7 @@ export default function DashboardPage() {
 
     const initializeData = async () => {
       try {
-        const response = await fetch('/api/auth/me', {
+        const response = await api.get('/api/auth/me', {
           signal: abortController.signal,
         });
         if (!response.ok) {
@@ -132,7 +123,7 @@ export default function DashboardPage() {
 
     const loadRooms = async () => {
       try {
-        const response = await fetch('/api/rooms', {
+        const response = await api.get('/api/rooms', {
           signal: abortController.signal,
         });
         if (!response.ok) throw new Error('Failed to fetch rooms');

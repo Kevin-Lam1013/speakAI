@@ -16,6 +16,7 @@ import {
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { api } from '@/lib/api';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(4),
@@ -100,19 +101,16 @@ export default function SignupForm() {
     }
 
     try {
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const response = await api.post(
+        '/api/auth/signup',
+        {
           firstName: formData.firstName,
           lastName: formData.lastName,
           email: formData.email,
           password: formData.password,
-        }),
-        credentials: 'include', // Important for cookies
-      });
+        },
+        { skipAuth: true }
+      );
 
       const data = await response.json();
 
@@ -194,7 +192,7 @@ export default function SignupForm() {
             </Typography>
           )}
 
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box display="flex" gap={2}>
             <StyledTextField
               margin="normal"
               required
