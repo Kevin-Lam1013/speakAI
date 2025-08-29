@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { verifyAccessToken } from '@/lib/jwt';
+import { verifyAccessToken } from '@/lib/authTokens';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = cookies();

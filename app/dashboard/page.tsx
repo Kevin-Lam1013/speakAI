@@ -1,100 +1,207 @@
 'use client';
 
-import { Box, Typography, Button, Container, Paper } from '@mui/material';
+import { useState, useEffect } from 'react';
+import { Box, Typography, Button, Container, Grid, CircularProgress, Alert } from '@mui/material';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import AddIcon from '@mui/icons-material/Add';
+import RoomCard from '@/components/room/RoomCard';
+import CreateRoomModal from '@/components/room/CreateRoomModal';
+import EmptyRoomState from '@/components/room/EmptyRoomState';
+import { Room } from '@/types/room';
+import { api } from '@/lib/api';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  const handleLogout = async () => {
-    setIsLoggingOut(true);
-
+  const fetchRooms = async () => {
     try {
-      const response = await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        // Clear any stored tokens from localStorage/sessionStorage
-        localStorage.removeItem('accessToken');
-        sessionStorage.removeItem('accessToken');
-
-        // Redirect to home page
-        router.push('/');
-        router.refresh();
+      const response = await api.get('/api/rooms');
+      if (!response.ok) throw new Error('Failed to fetch rooms');
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setRooms(data);
       } else {
-        console.error('Logout failed');
+        throw new Error('Invalid response format');
       }
-    } catch (error) {
-      console.error('Logout error:', error);
+    } catch (err) {
+      setError('Failed to load rooms. Please try again later.');
+      console.error('Error fetching rooms:', err);
     } finally {
-      setIsLoggingOut(false);
+      setLoading(false);
     }
   };
 
+  const handleCreateRoom = async (name: string) => {
+    try {
+      const response = await api.post('/api/rooms', { name });
+
+      if (!response.ok) throw new Error('Failed to create room');
+
+      const result = await response.json();
+      if (result.success && result.room) {
+        // Redirect to the room page using the invite code
+        router.push(`/rooms/${result.room.inviteCode}`);
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (err) {
+      console.error('Error creating room:', err);
+      throw err;
+    }
+  };
+
+  const handleEndRoom = async (inviteCode: string) => {
+    try {
+      const response = await api.put(`/api/rooms/${inviteCode}/end`);
+
+      if (!response.ok) {
+        throw new Error('Failed to end room');
+      }
+
+      // Refresh the rooms list
+      await fetchRooms();
+    } catch (err) {
+      console.error('Error ending room:', err);
+      setError('Failed to end room. Please try again later.');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      const response = await api.post('/api/auth/logout');
+
+      if (response.ok) {
+        router.push('/');
+        router.refresh();
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  useEffect(() => {
+    const abortController = new AbortController();
+
+    const initializeData = async () => {
+      try {
+        const response = await api.get('/api/auth/me', {
+          signal: abortController.signal,
+        });
+        if (!response.ok) {
+          if (response.status === 401) {
+            router.push('/');
+            return;
+          }
+          throw new Error('Failed to fetch user data');
+        }
+        const data = await response.json();
+        if (data.success && data.id) {
+          setUserId(data.id);
+        } else {
+          throw new Error('Invalid user data format');
+        }
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        console.error('Failed to fetch user:', err);
+        setError('Failed to load user data. Please try again later.');
+      }
+    };
+
+    initializeData();
+    return () => abortController.abort();
+  }, [router]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const abortController = new AbortController();
+
+    const loadRooms = async () => {
+      try {
+        const response = await api.get('/api/rooms', {
+          signal: abortController.signal,
+        });
+        if (!response.ok) throw new Error('Failed to fetch rooms');
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setRooms(data);
+        } else {
+          throw new Error('Invalid response format');
+        }
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        setError('Failed to load rooms. Please try again later.');
+        console.error('Error fetching rooms:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadRooms();
+    return () => abortController.abort();
+  }, [userId]);
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Paper
-        elevation={3}
-        sx={{
-          p: 4,
-          textAlign: 'center',
-          borderRadius: 2,
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: 'white',
-        }}
-      >
-        <Typography
-          variant="h3"
-          component="h1"
-          gutterBottom
-          sx={{
-            fontWeight: 'bold',
-            mb: 3,
-          }}
-        >
-          Welcome to the Dashboard
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+        <Typography variant="h4" component="h1">
+          My Rooms
         </Typography>
+        <Box>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setShowCreateModal(true)}
+            sx={{ mr: 2 }}
+          >
+            Create Room
+          </Button>
+          <Button variant="outlined" onClick={handleLogout}>
+            Logout
+          </Button>
+        </Box>
+      </Box>
 
-        <Typography
-          variant="h6"
-          sx={{
-            mb: 4,
-            opacity: 0.9,
-          }}
-        >
-          You have successfully logged in to SpeakAI!
-        </Typography>
+      {error && (
+        <Alert severity="error" sx={{ mb: 4 }}>
+          {error}
+        </Alert>
+      )}
 
-        <Button
-          variant="contained"
-          size="large"
-          onClick={handleLogout}
-          disabled={isLoggingOut}
-          sx={{
-            bgcolor: 'rgba(255, 255, 255, 0.2)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            color: 'white',
-            px: 4,
-            py: 1.5,
-            '&:hover': {
-              bgcolor: 'rgba(255, 255, 255, 0.3)',
-            },
-            '&:disabled': {
-              bgcolor: 'rgba(255, 255, 255, 0.1)',
-              color: 'rgba(255, 255, 255, 0.5)',
-            },
-          }}
-        >
-          {isLoggingOut ? 'Logging out...' : 'Logout'}
-        </Button>
-      </Paper>
+      {rooms.length === 0 ? (
+        <EmptyRoomState onCreateRoom={() => setShowCreateModal(true)} />
+      ) : (
+        <Grid container spacing={3}>
+          {rooms.map(room => (
+            <Grid item xs={12} sm={6} md={4} key={room.id}>
+              <RoomCard
+                room={room}
+                isCreator={userId === room.creatorId}
+                onEndRoom={handleEndRoom}
+              />
+            </Grid>
+          ))}
+        </Grid>
+      )}
+
+      <CreateRoomModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSubmit={handleCreateRoom}
+      />
     </Container>
   );
 }

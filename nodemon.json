@@ -1,0 +1,9 @@
+{
+  "watch": ["server.mjs", "lib/**/*.js", "lib/**/*.mjs", "lib/**/*.ts", ".env*"],
+  "ignore": ["node_modules", ".next", "**/*.test.js", "**/*.test.ts", "public"],
+  "ext": "js,mjs,ts,json",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "delay": "1000"
+}

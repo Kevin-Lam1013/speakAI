@@ -1,5 +1,5 @@
 export interface User {
-  id: number;
+  id: string;
   email: string;
   firstName: string;
   lastName: string;
@@ -30,8 +30,8 @@ export interface ApiSuccess<T = any> {
 export type ApiResponse<T = any> = ApiSuccess<T> | ApiError;
 
 export interface RefreshToken {
-  id: number;
-  userId: number;
+  id: string;
+  userId: string;
   tokenHash: string;
   expiresAt: Date;
   createdAt: Date;

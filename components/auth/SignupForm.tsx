@@ -15,8 +15,8 @@ import {
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import Visibility from '@mui/icons-material/Visibility';
-import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import { Visibility, VisibilityOff } from '@mui/icons-material';
+import { api } from '@/lib/api';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(4),
@@ -101,25 +101,26 @@ export default function SignupForm() {
     }
 
     try {
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const response = await api.post(
+        '/api/auth/signup',
+        {
           firstName: formData.firstName,
           lastName: formData.lastName,
           email: formData.email,
           password: formData.password,
-        }),
-        credentials: 'include', // Important for cookies
-      });
+        },
+        { skipAuth: true }
+      );
 
       const data = await response.json();
 
       if (data.success) {
-        // Redirect to dashboard using replace to prevent back navigation
-        router.replace('/dashboard');
+        // Get redirect URL from query params or default to dashboard
+        const params = new URLSearchParams(window.location.search);
+        const redirectUrl = params.get('redirect') || '/dashboard';
+
+        // Redirect using replace to prevent back navigation
+        router.replace(redirectUrl);
       } else {
         setError(data.message || 'Signup failed. Please try again.');
       }
@@ -137,6 +138,14 @@ export default function SignupForm() {
       ...prev,
       [name]: value,
     }));
+  };
+
+  const handleLoginLinkOnClick = () => {
+    // Preserve redirect URL when going to login
+    const params = new URLSearchParams(window.location.search);
+    const redirectUrl = params.get('redirect');
+    const loginUrl = redirectUrl ? `/login?redirect=${encodeURIComponent(redirectUrl)}` : '/login';
+    router.push(loginUrl);
   };
 
   return (
@@ -183,7 +192,7 @@ export default function SignupForm() {
             </Typography>
           )}
 
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box display="flex" gap={2}>
             <StyledTextField
               margin="normal"
               required
@@ -306,7 +315,7 @@ export default function SignupForm() {
               <Link
                 component="button"
                 variant="body2"
-                onClick={() => router.push('/login')}
+                onClick={handleLoginLinkOnClick}
                 sx={{
                   fontWeight: 'bold',
                   color: theme =>

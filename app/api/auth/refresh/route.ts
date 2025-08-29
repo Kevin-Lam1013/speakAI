@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyRefreshToken, generateAccessToken } from '@/lib/auth';
+import { verifyRefreshToken, generateAccessToken } from '@/lib/authTokens';
 import { query } from '@/lib/db';
+import { cleanExpiredTokens } from '@/lib/tokenService';
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     // Verify refresh token
     let decoded;
     try {
-      decoded = verifyRefreshToken(refreshToken);
+      decoded = await verifyRefreshToken(refreshToken);
     } catch (error) {
       return NextResponse.json(
         {
@@ -47,6 +48,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Opportunistic cleanup of expired refresh tokens (non-blocking)
+    cleanExpiredTokens().catch(() => {});
+
     // Get user info
     const userResult = await query(
       'SELECT id, email, first_name, last_name FROM users WHERE id = $1',
@@ -66,7 +70,7 @@ export async function POST(request: NextRequest) {
     const user = userResult.rows[0];
 
     // Generate new access token
-    const accessToken = generateAccessToken({
+    const accessToken = await generateAccessToken({
       userId: user.id,
       email: user.email,
     });

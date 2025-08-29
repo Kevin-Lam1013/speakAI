@@ -1,4 +1,4 @@
-import { Box, Card, Container, useTheme, styled } from '@mui/material';
+import { Box, Card, Container, styled } from '@mui/material';
 import { motion } from 'framer-motion';
 import { features } from '@/constants/features';
 import AnimatedText from '@/components/shared/AnimatedText';

@@ -15,23 +15,8 @@ import {
 } from '@mui/material';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import Visibility from '@mui/icons-material/Visibility';
-import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { api } from '@/lib/api';
-
-const CenteredBox = styled(Box)({
-  minHeight: '100vh',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  background: 'inherit',
-  padding: 16,
-});
-
-const FormWrapper = styled(Box)({
-  width: '100%',
-  maxWidth: 520,
-});
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(4),
@@ -132,6 +117,16 @@ export default function LoginForm() {
       ...prev,
       [name]: value,
     }));
+  };
+
+  const handleSignupLinkOnClick = () => {
+    // Preserve redirect URL when going to signup
+    const params = new URLSearchParams(window.location.search);
+    const redirectUrl = params.get('redirect');
+    const signupUrl = redirectUrl
+      ? `/signup?redirect=${encodeURIComponent(redirectUrl)}`
+      : '/signup';
+    router.push(signupUrl);
   };
 
   return (
@@ -242,7 +237,7 @@ export default function LoginForm() {
               <Link
                 component="button"
                 variant="body2"
-                onClick={() => router.push('/signup')}
+                onClick={handleSignupLinkOnClick}
                 sx={{
                   fontWeight: 'bold',
                   color: theme =>
