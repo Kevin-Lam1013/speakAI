@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { signupSchema } from '@/lib/validations';
 import { hashPassword } from '@/lib/password';
-import { generateAccessToken, generateRefreshToken } from '@/lib/authTokens';
+import { generateTokenPair } from '@/lib/tokenService';
 import { query } from '@/lib/db';
 import { AuthResponse } from '@/types/auth';
 
@@ -50,30 +50,8 @@ export async function POST(request: NextRequest) {
 
     const user = userResult.rows[0];
 
-    // Generate tokens
-    const [accessToken, refreshToken] = await Promise.all([
-      generateAccessToken({
-        userId: user.id,
-        email: user.email,
-      }),
-      generateRefreshToken({
-        userId: user.id,
-        email: user.email,
-      }),
-    ]);
-
-    // Hash refresh token before storing
-    const refreshTokenHash = await hashPassword(refreshToken);
-
-    // Store refresh token in database
-    const expiresAt = new Date(
-      Date.now() + parseInt(process.env.JWT_REFRESH_EXPIRES_IN || '604800') * 1000
-    );
-
-    await query(
-      'INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
-      [user.id, refreshTokenHash, expiresAt]
-    );
+    // Generate and persist tokens
+    const { accessToken, refreshToken } = await generateTokenPair(user.id, user.email);
 
     // Prepare response
     const response: AuthResponse = {
