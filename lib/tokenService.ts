@@ -33,13 +33,6 @@ export async function generateTokenPair(userId: number, email: string): Promise<
 }
 
 /**
- * Revoke refresh tokens for a user
- */
-export async function revokeRefreshToken(userId: number): Promise<void> {
-  await query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
-}
-
-/**
  * Clean expired refresh tokens from database
  */
 export async function cleanExpiredTokens(): Promise<void> {
