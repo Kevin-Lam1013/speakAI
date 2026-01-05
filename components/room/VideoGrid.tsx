@@ -13,7 +13,8 @@ interface Participant {
 
 const GridContainer = styled(Box)(({ theme }) => ({
   width: '100%',
-  height: 'calc(100vh - 160px)', // Account for header and controls
+  height: 'calc(100vh - 220px)', // More headroom for header, translation controls, and bottom bar
+  minHeight: 320,
   padding: theme.spacing(2),
   display: 'grid',
   gap: theme.spacing(2),

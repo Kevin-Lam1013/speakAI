@@ -22,6 +22,7 @@ export class PeerConnectionManager {
   private onStreamRemoveCallback: (userId: string) => void;
   private mediaState: MediaState = { video: false, audio: false };
   private remoteStreams: Map<string, MediaStream> = new Map();
+  private pendingIce: Map<string, RTCIceCandidateInit[]> = new Map();
 
   constructor(
     config: PeerConnectionConfig,
@@ -232,6 +233,15 @@ export class PeerConnectionManager {
         const hasVideoInOffer = offer.sdp?.includes('m=video') && !offer.sdp?.includes('m=video 0');
         const hasAudioInOffer = offer.sdp?.includes('m=audio') && !offer.sdp?.includes('m=audio 0');
 
+        // Simple glare handling: if not stable, rollback then apply remote
+        if (peerConnection.signalingState !== 'stable') {
+          try {
+            await peerConnection.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit);
+          } catch (e) {
+            console.warn('Rollback failed during glare handling', e);
+          }
+        }
+
         await peerConnection.setRemoteDescription(offer);
 
         // No special fallback: tracks will be merged on ontrack
@@ -249,6 +259,19 @@ export class PeerConnectionManager {
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
 
+        // Drain pending ICE now that remoteDescription is set
+        const queuedOfferIce = this.pendingIce.get(fromUserId);
+        if (queuedOfferIce?.length) {
+          for (const c of queuedOfferIce) {
+            try {
+              await peerConnection.addIceCandidate(new RTCIceCandidate(c));
+            } catch (err) {
+              console.warn('Failed to add queued ICE (offer path)', err);
+            }
+          }
+          this.pendingIce.delete(fromUserId);
+        }
+
         return {
           type: 'answer',
           payload: answer,
@@ -256,12 +279,44 @@ export class PeerConnectionManager {
         };
 
       case 'answer':
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(payload));
+        if (peerConnection.signalingState !== 'have-local-offer') {
+          console.warn('Ignoring answer in state', peerConnection.signalingState);
+          return;
+        }
+        try {
+          await peerConnection.setRemoteDescription(new RTCSessionDescription(payload));
+        } catch (err) {
+          console.error('Failed to set remote answer', err);
+        }
+
+        // Drain pending ICE now that remoteDescription is set
+        const queuedAnswerIce = this.pendingIce.get(fromUserId);
+        if (queuedAnswerIce?.length) {
+          for (const c of queuedAnswerIce) {
+            try {
+              await peerConnection.addIceCandidate(new RTCIceCandidate(c));
+            } catch (err) {
+              console.warn('Failed to add queued ICE (answer path)', err);
+            }
+          }
+          this.pendingIce.delete(fromUserId);
+        }
         break;
 
       case 'ice-candidate':
         if (payload) {
-          await peerConnection.addIceCandidate(new RTCIceCandidate(payload));
+          // If remote description not set yet, queue the candidate
+          if (!peerConnection.remoteDescription) {
+            const list = this.pendingIce.get(fromUserId) || [];
+            list.push(payload);
+            this.pendingIce.set(fromUserId, list);
+            return;
+          }
+          try {
+            await peerConnection.addIceCandidate(new RTCIceCandidate(payload));
+          } catch (err) {
+            console.warn('Failed to add ICE candidate', err);
+          }
         }
         break;
     }
