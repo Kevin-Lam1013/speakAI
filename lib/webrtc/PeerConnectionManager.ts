@@ -244,7 +244,10 @@ export class PeerConnectionManager {
 
         await peerConnection.setRemoteDescription(offer);
 
-        // No special fallback: tracks will be merged on ontrack
+        if (peerConnection.signalingState !== 'have-remote-offer') {
+          console.warn('Unexpected signalingState when answering offer', peerConnection.signalingState);
+          break;
+        }
 
         // Add local stream to the answer if available
         if (this.localStream) {
@@ -257,7 +260,12 @@ export class PeerConnectionManager {
         }
 
         const answer = await peerConnection.createAnswer();
-        await peerConnection.setLocalDescription(answer);
+        try {
+          await peerConnection.setLocalDescription(answer);
+        } catch (err) {
+          console.error('Failed to set local answer', err, 'state=', peerConnection.signalingState);
+          break;
+        }
 
         // Drain pending ICE now that remoteDescription is set
         const queuedOfferIce = this.pendingIce.get(fromUserId);

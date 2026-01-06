@@ -375,6 +375,7 @@ async function stopLanguageChannel(io, roomId, speakerId, language) {
   } catch {}
   entry.track = undefined;
   entry.source = undefined;
+  entry.lastSpokenText = '';
 
   // If this speaker has no active channels with subscribers, stop ASR session
   const langMap2 = room.pipelines.get(speakerId);
@@ -415,7 +416,7 @@ function ensureASRSession(io, roomId, speakerId) {
   speaker.asrActive = true;
   return new Promise((resolve, reject) => {
     const url =
-      'wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=48000&channels=1&model=nova-2&smart_format=true&interim_results=false';
+      'wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=48000&channels=1&model=nova-3&smart_format=true&interim_results=false&endpointing=300';
     const ws = new WebSocket(url, {
       headers: { Authorization: `Token ${DEEPGRAM_API_KEY}` },
     });
@@ -438,7 +439,7 @@ function ensureASRSession(io, roomId, speakerId) {
           msg?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
         const isFinal = Boolean(msg?.is_final || msg?.speech_final);
         if (transcript && isFinal) {
-          await handleFinalTranscript(io, roomId, speakerId, transcript);
+          await handleFinalTranscript(io, roomId, speakerId, transcript, isFinal);
         }
       } catch {}
     });
@@ -453,7 +454,7 @@ function ensureASRSession(io, roomId, speakerId) {
   });
 }
 
-async function handleFinalTranscript(io, roomId, speakerId, text) {
+async function handleFinalTranscript(io, roomId, speakerId, text, isFinal) {
   const room = getRoomState(roomId);
   const langMap = room.pipelines.get(speakerId);
   if (!langMap) return;
@@ -462,7 +463,10 @@ async function handleFinalTranscript(io, roomId, speakerId, text) {
     entries.map(async ([language, entry]) => {
       try {
         const translated = await googleTranslate(text, language);
-        await ttsToChannel(entry, translated, language);
+        const spoken = decodeEntities(translated);
+        // Debug: show what will be spoken
+        console.log(`[TTS] speaker=${speakerId} lang=${language} text="${spoken}"`);
+        await ttsToChannel(entry, spoken, language);
       } catch (e) {
         console.error('MT/TTS failed', e);
       }
@@ -561,6 +565,27 @@ function escapeXml(str) {
     .replace(/>/g, '&gt;')
     .replace(/\"/g, '&quot;')
     .replace(/'/g, '&apos;');
+}
+
+function decodeEntities(str = '') {
+  return (
+    String(str)
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      // numeric decimal entities
+      .replace(/&#(\d+);/g, (_, d) => {
+        const code = Number(d);
+        return Number.isFinite(code) ? String.fromCharCode(code) : _;
+      })
+      // numeric hex entities
+      .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => {
+        const code = parseInt(h, 16);
+        return Number.isFinite(code) ? String.fromCharCode(code) : _;
+      })
+  );
 }
 
 const dev = process.env.NODE_ENV !== 'production';
