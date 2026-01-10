@@ -5,6 +5,10 @@ import { Server as SocketIOServer } from 'socket.io';
 import * as jose from 'jose';
 import wrtc from 'wrtc';
 import dotenv from 'dotenv';
+import {
+  TranscribeStreamingClient,
+  StartStreamTranscriptionCommand,
+} from '@aws-sdk/client-transcribe-streaming';
 
 // Load env for the custom server
 dotenv.config({ path: '.env.local' });
@@ -17,11 +21,15 @@ const EVENT_TRANSLATION_PIPELINE_STATUS = 'translation:pipeline-status';
 // --- Translation in-memory state (room-scoped) ---
 const GRACE_PERIOD_MS = 15000; // 15s
 const SUPPORTED_LANGUAGES = new Set(['en-US', 'fr-FR', 'es-ES', 'zh-CN']);
-const DEEPGRAM_API_KEY = process.env.DEEPGRAM_ASR_KEY;
+const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
+const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
 const GOOGLE_MT_KEY = process.env.GOOGLE_MT_KEY;
 const AZURE_TTS_KEY = process.env.AZURE_TTS_KEY;
 const AZURE_TTS_REGION = process.env.AZURE_TTS_REGION || 'eastus';
 const AZURE_TTS_VOICE = process.env.AZURE_TTS_VOICE || 'en-US-FableMultilingualNeural';
+const LANGUAGE_OPTIONS = ['en-US', 'fr-FR', 'es-US', 'zh-CN'];
+const DEFAULT_LANGUAGE_CODE = 'en-US';
 
 /**
  * roomId -> {
@@ -330,9 +338,12 @@ async function startLanguageChannel(io, roomId, speakerId, language) {
   }, frameDurationMs);
 
   // Start ASR for this speaker (lazy), so we receive finalized transcripts to drive MT+TTS
-  ensureASRSession(io, roomId, speakerId).catch(err => {
-    console.error('ASR session error', err);
-  });
+  const asrPromise = ensureASRSession(io, roomId, speakerId);
+  if (asrPromise?.catch) {
+    asrPromise.catch(err => {
+      console.error('ASR session error', err);
+    });
+  }
 }
 
 async function stopLanguageChannel(io, roomId, speakerId, language) {
@@ -385,7 +396,10 @@ async function stopLanguageChannel(io, roomId, speakerId, language) {
   if (!stillActive && room.speakers?.has(speakerId)) {
     const sp = room.speakers.get(speakerId);
     try {
-      sp?.deepgram?.close?.();
+      sp?.transcribeAbort?.abort?.();
+    } catch {}
+    try {
+      sp?.transcribeClient?.destroy?.();
     } catch {}
     try {
       sp?.sink?.stop?.();
@@ -394,17 +408,19 @@ async function stopLanguageChannel(io, roomId, speakerId, language) {
   }
 }
 
-// --- ASR/MT/TTS Wiring ---
-import WebSocket from 'ws';
-
 function ensureASRSession(io, roomId, speakerId) {
   const room = getRoomState(roomId);
   if (!room.speakers) room.speakers = new Map();
   const speaker = room.speakers.get(speakerId);
   if (!speaker || speaker.asrActive) return Promise.resolve();
 
-  if (!DEEPGRAM_API_KEY) {
-    console.warn('DEEPGRAM_ASR_KEY not set; ASR disabled');
+  if (!AWS_REGION) {
+    console.warn('AWS_REGION not set; ASR disabled');
+    speaker.asrActive = false;
+    return Promise.resolve();
+  }
+  if (!AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
+    console.warn('AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY not set; ASR disabled');
     speaker.asrActive = false;
     return Promise.resolve();
   }
@@ -414,44 +430,110 @@ function ensureASRSession(io, roomId, speakerId) {
   }
 
   speaker.asrActive = true;
-  return new Promise((resolve, reject) => {
-    const url =
-      'wss://api.deepgram.com/v1/listen?encoding=linear16&sample_rate=48000&channels=1&model=nova-3&smart_format=true&interim_results=false&endpointing=300';
-    const ws = new WebSocket(url, {
-      headers: { Authorization: `Token ${DEEPGRAM_API_KEY}` },
-    });
-    speaker.deepgram = ws;
 
-    ws.on('open', () => {
-      // Feed PCM from RTCAudioSink
-      speaker.sink.ondata = data => {
-        try {
-          ws.send(Buffer.from(data.samples.buffer));
-        } catch {}
-      };
-      resolve();
-    });
-    ws.on('message', async buf => {
-      try {
-        const msg = JSON.parse(buf.toString());
-        const transcript =
-          msg?.channel?.alternatives?.[0]?.transcript ||
-          msg?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
-        const isFinal = Boolean(msg?.is_final || msg?.speech_final);
-        if (transcript && isFinal) {
-          await handleFinalTranscript(io, roomId, speakerId, transcript, isFinal);
-        }
-      } catch {}
-    });
-    ws.on('error', e => {
-      console.error('Deepgram WS error', e);
-      speaker.asrActive = false;
-      reject(e);
-    });
-    ws.on('close', () => {
-      speaker.asrActive = false;
-    });
+  const client = new TranscribeStreamingClient({
+    region: AWS_REGION,
+    credentials: {
+      accessKeyId: AWS_ACCESS_KEY_ID,
+      secretAccessKey: AWS_SECRET_ACCESS_KEY,
+    },
   });
+  const abortController = new AbortController();
+  const audioQueue = [];
+  let resolveNext;
+
+  // Avoid unbounded queue growth in bad network conditions
+  const MAX_QUEUE = 50;
+
+  const signalDone = () => {
+    if (resolveNext) {
+      resolveNext();
+      resolveNext = null;
+    }
+  };
+
+  speaker.sink.ondata = data => {
+    try {
+      const down = downsampleBuffer(data.samples, 48000, 16000);
+      if (audioQueue.length < MAX_QUEUE) {
+        audioQueue.push(Buffer.from(down.buffer));
+      }
+      signalDone();
+    } catch (e) {
+      console.error('Failed to enqueue audio chunk', e);
+    }
+  };
+
+  async function* audioStream() {
+    while (!abortController.signal.aborted) {
+      if (audioQueue.length === 0) {
+        await new Promise(resolve => {
+          resolveNext = resolve;
+        });
+        continue;
+      }
+      const chunk = audioQueue.shift();
+      yield { AudioEvent: { AudioChunk: chunk } };
+    }
+  }
+
+  speaker.transcribeClient = client;
+  speaker.transcribeAbort = abortController;
+
+  async function startStream({ identify }) {
+    const base = {
+      MediaEncoding: 'pcm',
+      MediaSampleRateHertz: 16000,
+      AudioStream: audioStream(),
+    };
+    const params = identify
+      ? { ...base, IdentifyLanguage: true, LanguageOptions: LANGUAGE_OPTIONS }
+      : { ...base, LanguageCode: DEFAULT_LANGUAGE_CODE };
+
+    const command = new StartStreamTranscriptionCommand(params);
+
+    const response = await client.send(command);
+    for await (const evt of response.TranscriptResultStream ?? []) {
+      const results = evt.TranscriptEvent?.Transcript?.Results;
+      if (!results || !results.length) continue;
+      for (const r of results) {
+        if (r.IsPartial) continue;
+        const alt = r.Alternatives && r.Alternatives[0];
+        const transcript = alt?.Transcript;
+        if (transcript) {
+          await handleFinalTranscript(io, roomId, speakerId, transcript, true);
+        }
+      }
+    }
+  }
+
+  (async () => {
+    try {
+      // First try with language ID
+      await startStream({ identify: true });
+    } catch (err) {
+      console.error(
+        'Transcribe stream (identify) failed, falling back to fixed language',
+        err?.name || err?.code || err,
+        err?.message,
+        err?.$metadata
+      );
+      try {
+        // Fallback to a fixed language to keep pipeline alive
+        await startStream({ identify: false });
+      } catch (err2) {
+        console.error(
+          'Transcribe stream (fixed language) failed',
+          err2?.name || err2?.code || err2,
+          err2?.message,
+          err2?.$metadata
+        );
+      }
+    } finally {
+      speaker.asrActive = false;
+      abortController.abort();
+    }
+  })();
 }
 
 async function handleFinalTranscript(io, roomId, speakerId, text, isFinal) {
@@ -586,6 +668,29 @@ function decodeEntities(str = '') {
         return Number.isFinite(code) ? String.fromCharCode(code) : _;
       })
   );
+}
+
+// Simple downsampler from 48k to 16k (mono) for Transcribe requirements
+function downsampleBuffer(input, inRate, outRate) {
+  if (outRate === inRate) return input;
+  const ratio = inRate / outRate;
+  const newLength = Math.round(input.length / ratio);
+  const result = new Int16Array(newLength);
+  let offsetResult = 0;
+  let offsetBuffer = 0;
+  while (offsetResult < result.length) {
+    const nextOffset = Math.round((offsetResult + 1) * ratio);
+    let accum = 0,
+      count = 0;
+    for (let i = offsetBuffer; i < nextOffset && i < input.length; i++) {
+      accum += input[i];
+      count++;
+    }
+    result[offsetResult] = Math.round(accum / count);
+    offsetResult++;
+    offsetBuffer = nextOffset;
+  }
+  return result;
 }
 
 const dev = process.env.NODE_ENV !== 'production';

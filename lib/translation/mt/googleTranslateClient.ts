@@ -10,5 +10,3 @@ export class GoogleMTClient {
     return text;
   }
 }
-
-

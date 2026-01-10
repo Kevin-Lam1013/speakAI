@@ -8,7 +8,10 @@ interface TranslatedAudioSinkProps {
   replaceMode?: boolean; // when true, original should be muted by caller
 }
 
-export default function TranslatedAudioSink({ streams, replaceMode = true }: TranslatedAudioSinkProps) {
+export default function TranslatedAudioSink({
+  streams,
+  replaceMode = true,
+}: TranslatedAudioSinkProps) {
   const audioRefs = useRef<HTMLAudioElement[]>([]);
 
   useEffect(() => {
@@ -55,5 +58,3 @@ export default function TranslatedAudioSink({ streams, replaceMode = true }: Tra
 
   return null;
 }
-
-

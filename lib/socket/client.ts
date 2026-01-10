@@ -1,5 +1,9 @@
 import { io, Socket } from 'socket.io-client';
-import { EVENT_TRANSLATION_PIPELINE_STATUS, EVENT_TRANSLATION_PREFERENCE, EVENT_TRANSLATION_TRACK_READY } from './events';
+import {
+  EVENT_TRANSLATION_PIPELINE_STATUS,
+  EVENT_TRANSLATION_PREFERENCE,
+  EVENT_TRANSLATION_TRACK_READY,
+} from './events';
 
 type SignalingType = 'offer' | 'answer' | 'ice-candidate';
 
@@ -124,12 +128,16 @@ class SocketClient {
     this.socket.emit(EVENT_TRANSLATION_PREFERENCE, data);
   }
 
-  onTranslationTrackReady(callback: (data: { speakerId: string; language: string; trackId: string }) => void) {
+  onTranslationTrackReady(
+    callback: (data: { speakerId: string; language: string; trackId: string }) => void
+  ) {
     this.socket?.on(EVENT_TRANSLATION_TRACK_READY, callback);
     return () => this.socket?.off(EVENT_TRANSLATION_TRACK_READY, callback);
   }
 
-  onTranslationPipelineStatus(callback: (data: { speakerId: string; language: string; state: string }) => void) {
+  onTranslationPipelineStatus(
+    callback: (data: { speakerId: string; language: string; state: string }) => void
+  ) {
     this.socket?.on(EVENT_TRANSLATION_PIPELINE_STATUS, callback);
     return () => this.socket?.off(EVENT_TRANSLATION_PIPELINE_STATUS, callback);
   }

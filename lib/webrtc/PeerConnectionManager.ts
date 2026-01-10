@@ -236,7 +236,9 @@ export class PeerConnectionManager {
         // Simple glare handling: if not stable, rollback then apply remote
         if (peerConnection.signalingState !== 'stable') {
           try {
-            await peerConnection.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit);
+            await peerConnection.setLocalDescription({
+              type: 'rollback',
+            } as RTCSessionDescriptionInit);
           } catch (e) {
             console.warn('Rollback failed during glare handling', e);
           }
@@ -245,7 +247,10 @@ export class PeerConnectionManager {
         await peerConnection.setRemoteDescription(offer);
 
         if (peerConnection.signalingState !== 'have-remote-offer') {
-          console.warn('Unexpected signalingState when answering offer', peerConnection.signalingState);
+          console.warn(
+            'Unexpected signalingState when answering offer',
+            peerConnection.signalingState
+          );
           break;
         }
 

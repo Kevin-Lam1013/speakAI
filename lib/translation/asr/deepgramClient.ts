@@ -19,5 +19,3 @@ export class DeepgramASRClient {
     return gen();
   }
 }
-
-

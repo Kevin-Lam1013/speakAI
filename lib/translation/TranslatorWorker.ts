@@ -21,5 +21,3 @@ export class TranslatorWorker {
     return this.pipelineManager.stopPipeline(speakerId, language);
   }
 }
-
-

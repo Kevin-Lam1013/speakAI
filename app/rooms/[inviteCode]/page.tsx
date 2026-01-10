@@ -36,7 +36,9 @@ export default function RoomPage() {
   const [room, setRoom] = useState<RoomData>();
   const [accessToken, setAccessToken] = useState<string>();
   const [userId, setUserId] = useState<string>();
-  const [selectedLanguage, setSelectedLanguage] = useState<null | 'en-US' | 'fr-FR' | 'es-ES' | 'zh-CN'>(null);
+  const [selectedLanguage, setSelectedLanguage] = useState<
+    null | 'en-US' | 'fr-FR' | 'es-ES' | 'zh-CN'
+  >(null);
   const [translatedStreams, setTranslatedStreams] = useState<MediaStream[]>([]);
 
   // Fetch room data and user info
@@ -169,15 +171,10 @@ export default function RoomPage() {
         participants={allParticipants.map(p => ({
           ...p,
           // Mute all remote originals when translation is active (simple global replace mode)
-          isAudioOn:
-            p.id === userId
-              ? mediaState.audio
-              : translatedActive
-                ? false
-                : p.isAudioOn,
+          isAudioOn: p.id === userId ? mediaState.audio : translatedActive ? false : p.isAudioOn,
         }))}
         localParticipantId={userId}
-      />  
+      />
 
       <RoomControls
         isCameraOn={mediaState.video}

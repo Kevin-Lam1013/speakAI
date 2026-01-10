@@ -2,5 +2,3 @@
 export function isSpeechFrame(_pcm: Float32Array): boolean {
   return true;
 }
-
-

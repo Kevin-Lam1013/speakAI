@@ -4,7 +4,11 @@ import type { LanguageCode, PipelineState, TrackDescriptor } from './types';
 export class PipelineManager {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   startPipeline(_speakerId: string, _language: LanguageCode): Promise<TrackDescriptor> {
-    return Promise.resolve({ speakerId: 'placeholder', language: 'en-US', trackLabel: 'placeholder:en-US' });
+    return Promise.resolve({
+      speakerId: 'placeholder',
+      language: 'en-US',
+      trackLabel: 'placeholder:en-US',
+    });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -17,5 +21,3 @@ export class PipelineManager {
     return 'stopped';
   }
 }
-
-

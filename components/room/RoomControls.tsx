@@ -17,8 +17,7 @@ const ControlsContainer = styled(Box)(({ theme }) => ({
   padding: theme.spacing(2),
   display: 'flex',
   justifyContent: 'center',
-  background:
-    theme.palette.mode === 'dark' ? 'rgba(15, 23, 42, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+  background: theme.palette.mode === 'dark' ? 'rgba(15, 23, 42, 0.9)' : 'rgba(255, 255, 255, 0.95)',
   backdropFilter: 'blur(10px)',
   borderTop: `1px solid ${
     theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'

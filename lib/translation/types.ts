@@ -7,5 +7,3 @@ export interface TrackDescriptor {
 }
 
 export type PipelineState = 'starting' | 'active' | 'stopping' | 'stopped' | 'error';
-
-

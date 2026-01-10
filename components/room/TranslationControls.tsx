@@ -1,7 +1,15 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Box, FormControl, InputLabel, MenuItem, Select, SelectChangeEvent, Typography } from '@mui/material';
+import {
+  Box,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  SelectChangeEvent,
+  Typography,
+} from '@mui/material';
 
 export type LanguageCode = 'en-US' | 'fr-FR' | 'es-ES' | 'zh-CN';
 
@@ -10,7 +18,10 @@ interface TranslationControlsProps {
   onLanguageChange: (language: LanguageCode | null) => void;
 }
 
-export default function TranslationControls({ selectedLanguage, onLanguageChange }: TranslationControlsProps) {
+export default function TranslationControls({
+  selectedLanguage,
+  onLanguageChange,
+}: TranslationControlsProps) {
   const options = useMemo(
     () => [
       { code: 'en-US', label: 'English (US)' },
@@ -38,7 +49,8 @@ export default function TranslationControls({ selectedLanguage, onLanguageChange
         gap: 1.5,
         px: 1.5,
         py: 1,
-        bgcolor: theme => (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'),
+        bgcolor: theme =>
+          theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
         borderRadius: 2,
       }}
     >
@@ -52,7 +64,8 @@ export default function TranslationControls({ selectedLanguage, onLanguageChange
           minWidth: 240,
           '& .MuiOutlinedInput-root': {
             borderRadius: 2,
-            backgroundColor: theme => (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'),
+            backgroundColor: theme =>
+              theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff',
           },
         }}
       >
@@ -75,5 +88,3 @@ export default function TranslationControls({ selectedLanguage, onLanguageChange
     </Box>
   );
 }
-
-
