@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SpeakAI WebRTC + Live Translation
 
-## Getting Started
+Multi-party WebRTC rooms with an optional server-side translation bot. When a listener picks a target language, the original speaker audio is muted for that listener and replaced by translated TTS audio.
 
-First, run the development server:
+## Features
+- WebRTC mesh for participant media.
+- Server “bot peer” (Node + `wrtc`) joins each room to ingest audio and publish translated tracks.
+- Streaming pipeline: VAD/ASR (AWS Transcribe with language ID) → MT (Google Cloud Translation) → TTS (Azure Neural TTS, default `en-US-FableMultilingualNeural` in `eastus`).
+- Replace-mode playback: translated track mutes the original for listeners who opt in.
+- Per-room, per-listener language preference; pipelines spin up on demand and tear down after inactivity.
+- Supported targets: en-US, fr-FR, es-ES, zh-CN.
 
+## Requirements
+- Node.js LTS
+- npm
+- WebRTC-capable browser
+- Cloud credentials: AWS Transcribe, Google Translation, Azure TTS
+
+## Setup
+1) Install deps:
+```bash
+npm install
+```
+2) Copy env template and fill with your keys:
+```bash
+cp .env.example .env.local
+```
+   - Keep secrets in env files; `.env*` is git-ignored except `.env.example`.
+3) Run the app:
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
+Open http://localhost:3000 and join/create a room.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment variables (sample names)
+- `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+- `GOOGLE_MT_KEY`
+- `AZURE_TTS_KEY`, `AZURE_TTS_REGION`, `AZURE_TTS_VOICE`
+- `JWT_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL` (auth/db)
+- `NEXTAUTH_URL` (for production auth callbacks)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How it works (high level)
+- Browser peers connect via Socket.IO signaling.
+- A server “translator-bot” peer attaches an audio sink to each speaker.
+- Audio is downsampled to 16 kHz and streamed to Transcribe with language ID and fallback.
+- Final transcripts feed Google MT; translated text goes to Azure TTS.
+- PCM is chunked (10 ms) into an `RTCAudioSource`; the bot publishes translated tracks.
+- Clients mute originals when a translated track is active in their chosen language.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Notes
+- No DB persistence for language choices; they are room-scoped.
+- Pipelines are on-demand with a short grace period before teardown to save cost.
+- If TTS lags, captions-only fallback is acceptable; audio resumes when ready.
