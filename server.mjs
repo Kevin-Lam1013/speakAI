@@ -546,8 +546,6 @@ async function handleFinalTranscript(io, roomId, speakerId, text, isFinal) {
       try {
         const translated = await googleTranslate(text, language);
         const spoken = decodeEntities(translated);
-        // Debug: show what will be spoken
-        console.log(`[TTS] speaker=${speakerId} lang=${language} text="${spoken}"`);
         await ttsToChannel(entry, spoken, language);
       } catch (e) {
         console.error('MT/TTS failed', e);
