@@ -37,6 +37,7 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [mediaState, setMediaState] = useState<MediaState>({ video: false, audio: false });
   const [isInitialized, setIsInitialized] = useState(false);
+  const [botStream, setBotStream] = useState<MediaStream | null>(null);
 
   // Initialize WebRTC and Socket connection
   useEffect(() => {
@@ -56,9 +57,17 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
     const peerManager = new PeerConnectionManager(
       config,
       (userId, stream) => {
+        if (userId === 'translator-bot') {
+          setBotStream(stream);
+          return;
+        }
         setParticipants(prev => prev.map(p => (p.userId === userId ? { ...p, stream } : p)));
       },
       userId => {
+        if (userId === 'translator-bot') {
+          setBotStream(null);
+          return;
+        }
         setParticipants(prev =>
           prev.map(p => (p.userId === userId ? { ...p, stream: undefined } : p))
         );
@@ -244,5 +253,6 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
     mediaState,
     toggleCamera,
     toggleAudio,
+    botStream,
   };
 }

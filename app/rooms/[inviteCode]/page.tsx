@@ -10,6 +10,8 @@ import LoadingState from '@/components/shared/LoadingState';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { socketClient } from '@/lib/socket/client';
 import { api } from '@/lib/api';
+import TranslationControls from '@/components/room/TranslationControls';
+import TranslatedAudioSink from '@/components/room/TranslatedAudioSink';
 
 interface RoomData {
   id: string;
@@ -34,6 +36,10 @@ export default function RoomPage() {
   const [room, setRoom] = useState<RoomData>();
   const [accessToken, setAccessToken] = useState<string>();
   const [userId, setUserId] = useState<string>();
+  const [selectedLanguage, setSelectedLanguage] = useState<
+    null | 'en-US' | 'fr-FR' | 'es-ES' | 'zh-CN'
+  >(null);
+  const [translatedStreams, setTranslatedStreams] = useState<MediaStream[]>([]);
 
   // Fetch room data and user info
   useEffect(() => {
@@ -81,7 +87,14 @@ export default function RoomPage() {
     mediaState,
     toggleCamera,
     toggleAudio,
+    botStream,
   } = useWebRTC(room?.id || '', userId || '', accessToken || '');
+
+  // Handle translation preference change (emit only; server/bot to be implemented later)
+  const handleLanguageChange = (language: 'en-US' | 'fr-FR' | 'es-ES' | 'zh-CN' | null) => {
+    setSelectedLanguage(language);
+    socketClient.sendTranslationPreference({ language }).catch(() => {});
+  };
 
   const handleLeaveRoom = async () => {
     try {
@@ -131,11 +144,16 @@ export default function RoomPage() {
 
   const allParticipants: Participant[] = participants.map(p => ({
     id: p.userId,
-    name: p.userId === userId ? 'You (Local)' : p.email,
+    name: p.userId === userId ? 'Me' : p.email,
     stream: p.userId === userId ? localStream || undefined : p.stream,
     isCameraOn: p.userId === userId ? mediaState.video : p.mediaState?.video || false,
     isAudioOn: p.userId === userId ? mediaState.audio : p.mediaState?.audio || false,
   }));
+
+  // Replace-mode muting: only when a live translated audio track exists
+  const translatedActive =
+    !!selectedLanguage &&
+    !!botStream?.getAudioTracks().some(t => t.readyState === 'live' && t.enabled && !t.muted);
 
   return (
     <Container maxWidth="xl" sx={{ height: '100vh', pt: 8, pb: 8 }}>
@@ -146,7 +164,17 @@ export default function RoomPage() {
         onEndRoom={handleEndRoom}
       />
 
-      <VideoGrid participants={allParticipants} localParticipantId={userId} />
+      {/* Hidden audio sinks for translated tracks (Replace mode handled by track composition) */}
+      <TranslatedAudioSink streams={botStream ? [botStream] : []} replaceMode />
+
+      <VideoGrid
+        participants={allParticipants.map(p => ({
+          ...p,
+          // Mute all remote originals when translation is active (simple global replace mode)
+          isAudioOn: p.id === userId ? mediaState.audio : translatedActive ? false : p.isAudioOn,
+        }))}
+        localParticipantId={userId}
+      />
 
       <RoomControls
         isCameraOn={mediaState.video}
@@ -154,6 +182,12 @@ export default function RoomPage() {
         onCameraToggle={toggleCamera}
         onAudioToggle={toggleAudio}
         onLeaveRoom={handleLeaveRoom}
+        translationControl={
+          <TranslationControls
+            selectedLanguage={selectedLanguage}
+            onLanguageChange={handleLanguageChange}
+          />
+        }
       />
     </Container>
   );

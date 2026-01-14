@@ -12,6 +12,7 @@
     "migrate": "psql $DATABASE_URL -f migrations/*.sql"
   },
   "dependencies": {
+    "@aws-sdk/client-transcribe-streaming": "^3.966.0",
     "@emotion/cache": "^11.11.0",
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
@@ -19,6 +20,7 @@
     "@mui/lab": "^5.0.0-alpha.163",
     "@mui/material": "^5.15.7",
     "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
     "framer-motion": "^11.0.3",
     "jose": "^6.0.11",
     "jsonwebtoken": "^9.0.2",
@@ -40,8 +42,11 @@
     "@types/react-dom": "^18.2.18",
     "@types/socket.io": "^3.0.2",
     "@types/socket.io-client": "^3.0.0",
+    "node-pre-gyp": "^0.17.0",
     "nodemon": "^3.1.10",
     "prettier": "^3.2.5",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "wrtc": "^0.4.7",
+    "ws": "^8.17.0"
   }
 }

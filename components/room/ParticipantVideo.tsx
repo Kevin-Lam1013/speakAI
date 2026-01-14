@@ -246,6 +246,7 @@ export default function ParticipantVideo({
 
   // Generate initials from name for avatar
   const getInitials = (name: string) => {
+    if (name.trim().toLowerCase() === 'me') return 'Me';
     return name
       .split(' ')
       .map(word => word.charAt(0))
