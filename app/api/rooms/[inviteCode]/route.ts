@@ -43,14 +43,14 @@ export async function GET(request: NextRequest, { params }: { params: { inviteCo
       [room.id]
     );
 
-    // Add user as participant if not already in room
-    const isParticipant = participantsResult.rows.some(p => p.id === userId);
-    if (!isParticipant) {
-      await query('INSERT INTO room_participants (room_id, user_id) VALUES ($1, $2)', [
-        room.id,
-        userId,
-      ]);
-    }
+    // Upsert participant atomically — handles concurrent GET calls (e.g. React StrictMode)
+    // and rejoin after leaving. ON CONFLICT resets left_at so the user shows as active.
+    await query(
+      `INSERT INTO room_participants (room_id, user_id)
+       VALUES ($1, $2)
+       ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL, joined_at = NOW()`,
+      [room.id, userId]
+    );
 
     return NextResponse.json({
       success: true,
@@ -104,32 +104,13 @@ export async function POST(request: NextRequest, { params }: { params: { inviteC
 
     const room = roomResult.rows[0];
 
-    // Check if user is already in room
-    const participantResult = await query(
-      'SELECT * FROM room_participants WHERE room_id = $1 AND user_id = $2 AND left_at IS NULL',
+    // Upsert atomically — idempotent and race-condition-safe.
+    await query(
+      `INSERT INTO room_participants (room_id, user_id)
+       VALUES ($1, $2)
+       ON CONFLICT (room_id, user_id) DO UPDATE SET left_at = NULL, joined_at = NOW()`,
       [room.id, userId]
     );
-
-    if (participantResult.rows.length > 0) {
-      return NextResponse.json({
-        success: true,
-        message: 'Already in room',
-        room: {
-          id: room.id,
-          name: room.name,
-          inviteCode: room.invite_code,
-          creatorId: room.creator_id,
-          status: room.status,
-          createdAt: room.created_at,
-        },
-      });
-    }
-
-    // Add user to room
-    await query('INSERT INTO room_participants (room_id, user_id) VALUES ($1, $2)', [
-      room.id,
-      userId,
-    ]);
 
     return NextResponse.json({
       success: true,

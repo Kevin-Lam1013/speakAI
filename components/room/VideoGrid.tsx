@@ -13,33 +13,18 @@ interface Participant {
 
 const GridContainer = styled(Box)(({ theme }) => ({
   width: '100%',
-  height: 'calc(100vh - 220px)', // More headroom for header, translation controls, and bottom bar
   minHeight: 320,
   padding: theme.spacing(2),
   display: 'grid',
   gap: theme.spacing(2),
 }));
 
-// Different grid layouts based on participant count
-const gridConfigs = {
-  1: {
-    gridTemplateColumns: '1fr',
-    gridTemplateRows: '1fr',
-  },
-  2: {
-    gridTemplateColumns: '1fr 1fr',
-    gridTemplateRows: '1fr',
-  },
-  3: {
-    gridTemplateColumns: '1fr 1fr',
-    gridTemplateRows: '1fr 1fr',
-    gridTemplateAreas: '"top-left top-right" "bottom bottom"',
-  },
-  4: {
-    gridTemplateColumns: '1fr 1fr',
-    gridTemplateRows: '1fr 1fr',
-  },
-};
+function getGridColumns(count: number): number {
+  if (count <= 2) return count || 1;
+  if (count <= 4) return 2;
+  if (count <= 9) return 3;
+  return 4;
+}
 
 interface VideoGridProps {
   participants: Participant[];
@@ -48,29 +33,25 @@ interface VideoGridProps {
 
 export default function VideoGrid({ participants, localParticipantId }: VideoGridProps) {
   const count = participants.length;
-  const gridStyle = gridConfigs[count as keyof typeof gridConfigs] || gridConfigs[4];
-
-  // For 3 participants, we need to apply special styles to the bottom video
-  const getParticipantStyle = (index: number) => {
-    if (count === 3 && index === 2) {
-      return {
-        gridArea: 'bottom',
-        maxWidth: '50%',
-        margin: '0 auto',
-      };
-    }
-    return {};
-  };
+  const cols = getGridColumns(count);
+  // For ≤9 participants the grid fills the viewport height; for 10+ let it grow and scroll.
+  const heightConstrained = count <= 9;
 
   return (
-    <GridContainer sx={gridStyle}>
-      {participants.map((participant, index) => (
+    <GridContainer
+      sx={{
+        gridTemplateColumns: `repeat(${cols}, 1fr)`,
+        height: heightConstrained ? 'calc(100vh - 220px)' : 'auto',
+        overflowY: heightConstrained ? 'hidden' : 'auto',
+      }}
+    >
+      {participants.map(participant => (
         <Box
           key={participant.id}
           sx={{
             width: '100%',
-            height: '100%',
-            ...getParticipantStyle(index),
+            // Height-constrained layouts fill the row; unconstrained use aspect ratio.
+            ...(heightConstrained ? { height: '100%' } : { aspectRatio: '16/9' }),
           }}
         >
           <ParticipantVideo
