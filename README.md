@@ -1,11 +1,10 @@
-# SpeakAI: Real-Time WebRTC Translation Platform
+# SpeakAI: Real-Time Translation Platform
 
-Multi-party WebRTC rooms with a server-side translation bot that routes speech into each listener's preferred language. When a listener opts in, the original speaker audio is muted for that listener and replaced by low-latency translated TTS audio.
+Multi-party video rooms with server-side real-time translation. When a listener opts in to a language, everything they hear is automatically translated into that language — the original speaker audio is muted and replaced by low-latency TTS audio in their chosen language.
 
 ## Features
-- Multi-party WebRTC mesh with authenticated Socket.IO signaling.
-- Server "translator-bot" peer (Node + `wrtc`) joins each room to ingest audio and publish per-language tracks.
-- Streaming pipeline: Voice Activity Detection/Automatic Speech Recognition (AWS Transcribe with language ID) -> Machine Translation (Google Cloud Translation) -> Text-To-Speech (Azure Neural TTS, default `en-US-FableMultilingualNeural` in `eastus`).
+- Multi-party rooms via a mediasoup SFU (Selective Forwarding Unit) — scales well beyond the 4–6 user limit of a mesh topology.
+- Streaming translation pipeline: AWS Transcribe (ASR with language ID) → Google Cloud Translation (MT) → Azure Neural TTS.
 - Per-listener language routing with replace-mode playback (translated track mutes the original).
 - On-demand pipeline lifecycle with inactivity-based teardown for cost control.
 - Supported targets: en-US, fr-FR, es-ES, zh-CN.
@@ -32,22 +31,22 @@ npm run dev
 ```
 Open http://localhost:3000 and join/create a room.
 
-## Environment variables (sample names)
-- `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
-- `GOOGLE_MT_KEY`
-- `AZURE_TTS_KEY`, `AZURE_TTS_REGION`, `AZURE_TTS_VOICE`
-- `JWT_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL` (auth/db)
-- `NEXTAUTH_URL` (for production auth callbacks)
+## Environment variables
+- `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` — AWS Transcribe
+- `GOOGLE_MT_KEY` — Google Cloud Translation
+- `AZURE_TTS_KEY`, `AZURE_TTS_REGION`, `AZURE_TTS_VOICE` — Azure Neural TTS
+- `JWT_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL` — auth and database
+- `ANNOUNCED_IP` — mediasoup ICE candidate IP (127.0.0.1 for local dev, public IP in production)
 
-## How it works (high level)
-- Browser peers connect via Socket.IO signaling and establish a WebRTC mesh.
-- A server "translator-bot" peer attaches an audio sink to each speaker's inbound track.
-- Audio is downsampled to 16 kHz and streamed to AWS Transcribe with language ID and a fixed-language fallback.
-- Final transcripts are translated with Google MT; the translated text is synthesized by Azure TTS.
-- PCM is chunked (10 ms) into an `RTCAudioSource`; the bot publishes per-language tracks to subscribers.
-- Clients automatically mute originals when a translated track is active for their chosen language.
+## How it works
+- Each client connects to the mediasoup SFU via one send transport and one recv transport.
+- The server ingests each speaker's audio via a PlainTransport consumer → UDP socket → opusscript decode → PCM.
+- PCM is downsampled to 16 kHz and streamed to AWS Transcribe with automatic language detection.
+- Final transcripts are translated by Google MT and synthesized by Azure Neural TTS.
+- TTS PCM is re-encoded with opusscript and injected back into mediasoup as a new Producer per *(speaker × language)* pair.
+- Listeners who select a language receive that TTS producer and their local audio element mutes the original.
 
 ## Notes
 - Language preferences are room-scoped and kept in memory (no DB persistence).
-- Pipelines are created on demand and torn down after a short grace period to reduce cloud spend.
-- If TTS lags, captions-only is acceptable until audio resumes.
+- Pipelines are created on demand and torn down after a 15-second grace period when no listeners remain.
+- `ANNOUNCED_IP` must be the server's public IP in production for WebRTC ICE to work with remote clients.

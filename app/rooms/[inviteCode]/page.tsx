@@ -39,8 +39,6 @@ export default function RoomPage() {
   const [selectedLanguage, setSelectedLanguage] = useState<
     null | 'en-US' | 'fr-FR' | 'es-ES' | 'zh-CN'
   >(null);
-  const [translatedStreams, setTranslatedStreams] = useState<MediaStream[]>([]);
-
   // Fetch room data and user info
   useEffect(() => {
     const fetchData = async () => {
@@ -142,18 +140,30 @@ export default function RoomPage() {
     return <LoadingState message="Connecting to room..." />;
   }
 
-  const allParticipants: Participant[] = participants.map(p => ({
-    id: p.userId,
-    name: p.userId === userId ? 'Me' : p.email,
-    stream: p.userId === userId ? localStream || undefined : p.stream,
-    isCameraOn: p.userId === userId ? mediaState.video : p.mediaState?.video || false,
-    isAudioOn: p.userId === userId ? mediaState.audio : p.mediaState?.audio || false,
-  }));
+  // Always include the local user first — the server never sends our own userId back
+  // in room-participants or participant-joined, so we inject it manually.
+  const allParticipants: Participant[] = [
+    {
+      id: userId,
+      name: 'Me',
+      stream: localStream || undefined,
+      isCameraOn: mediaState.video,
+      isAudioOn: mediaState.audio,
+    },
+    ...participants
+      .filter(p => p.userId !== userId) // guard against accidental duplicate
+      .map(p => ({
+        id: p.userId,
+        name: p.email,
+        stream: p.stream,
+        isCameraOn: p.mediaState?.video || false,
+        isAudioOn: p.mediaState?.audio || false,
+      })),
+  ];
 
-  // Replace-mode muting: only when a live translated audio track exists
-  const translatedActive =
-    !!selectedLanguage &&
-    !!botStream?.getAudioTracks().some(t => t.readyState === 'live' && t.enabled && !t.muted);
+  // Replace-mode muting: when the user has selected a translation language,
+  // mute all original audio immediately (TTS audio plays via TranslatedAudioSink)
+  const translatedActive = !!selectedLanguage;
 
   return (
     <Container maxWidth="xl" sx={{ height: '100vh', pt: 8, pb: 8 }}>

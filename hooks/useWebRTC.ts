@@ -1,158 +1,202 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { PeerConnectionManager } from '@/lib/webrtc/PeerConnectionManager';
+import { SFUConnectionManager } from '@/lib/webrtc/SFUConnectionManager';
 import { socketClient } from '@/lib/socket/client';
-
-interface WebRTCConfig {
-  iceServers: RTCIceServer[];
-}
 
 interface Participant {
   userId: string;
   email: string;
   stream?: MediaStream;
-  mediaState?: MediaState;
-}
-
-interface MediaState {
-  video: boolean;
-  audio: boolean;
-}
-
-type SignalingType = 'offer' | 'answer' | 'ice-candidate';
-
-interface SignalingMessage {
-  type: SignalingType;
-  payload: any;
-  fromUserId: string;
-  targetUserId: string;
+  mediaState?: { video: boolean; audio: boolean };
 }
 
 export function useWebRTC(roomId: string, userId: string, token: string) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string>();
-  const peerManagerRef = useRef<PeerConnectionManager>();
+  const sfuManagerRef = useRef<SFUConnectionManager>();
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [mediaState, setMediaState] = useState<MediaState>({ video: false, audio: false });
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [mediaState, setMediaState] = useState({ video: false, audio: false });
   const [botStream, setBotStream] = useState<MediaStream | null>(null);
+  const roomIdRef = useRef(roomId);
+  roomIdRef.current = roomId;
 
-  // Initialize WebRTC and Socket connection
+  // Buffer for sfu:new-producer events that arrive before recv transport is ready
+  const pendingProducers = useRef<{ producerId: string; userId: string; kind: string }[]>([]);
+  const recvTransportReady = useRef(false);
+  // Accumulates one MediaStream per TTS producer so multiple speakers are all heard
+  const ttsStreamsRef = useRef<Map<string, MediaStream>>(new Map());
+
   useEffect(() => {
-    // Don't connect if we don't have all required data
-    if (!roomId || !userId || !token) {
-      return;
-    }
+    if (!roomId || !userId || !token) return;
 
-    const config: WebRTCConfig = {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        // Add TURN servers here for production
-      ],
+    const sfuManager = new SFUConnectionManager({
+      connectTransport: (transportId, dtlsParameters) =>
+        socketClient.connectSfuTransport(transportId, dtlsParameters),
+
+      produce: (transportId, kind, rtpParameters) =>
+        socketClient.sfuProduce(roomIdRef.current, transportId, kind, rtpParameters),
+
+      closeProducer: (kind) =>
+        socketClient.sfuCloseProducer(roomIdRef.current, kind),
+
+      consume: (producerId, rtpCapabilities) =>
+        socketClient.sfuConsume(roomIdRef.current, producerId, rtpCapabilities),
+
+      resumeConsumer: consumerId => socketClient.sfuResumeConsumer(consumerId),
+    });
+
+    // Route incoming streams to the correct state
+    sfuManager.onStream = (producerUserId, stream) => {
+      if (producerUserId.startsWith('tts:')) {
+        ttsStreamsRef.current.set(producerUserId, stream);
+        const allTracks = Array.from(ttsStreamsRef.current.values()).flatMap(s => s.getTracks());
+        setBotStream(allTracks.length > 0 ? new MediaStream(allTracks) : null);
+        return;
+      }
+      setParticipants(prev =>
+        prev.map(p => (p.userId === producerUserId ? { ...p, stream } : p))
+      );
     };
 
-    // Create peer connection manager
-    const peerManager = new PeerConnectionManager(
-      config,
-      (userId, stream) => {
-        if (userId === 'translator-bot') {
-          setBotStream(stream);
-          return;
-        }
-        setParticipants(prev => prev.map(p => (p.userId === userId ? { ...p, stream } : p)));
-      },
-      userId => {
-        if (userId === 'translator-bot') {
-          setBotStream(null);
-          return;
-        }
-        setParticipants(prev =>
-          prev.map(p => (p.userId === userId ? { ...p, stream: undefined } : p))
-        );
+    sfuManager.onStreamRemoved = producerUserId => {
+      if (producerUserId.startsWith('tts:')) {
+        ttsStreamsRef.current.delete(producerUserId);
+        const allTracks = Array.from(ttsStreamsRef.current.values()).flatMap(s => s.getTracks());
+        setBotStream(allTracks.length > 0 ? new MediaStream(allTracks) : null);
+        return;
       }
-    );
+      setParticipants(prev =>
+        prev.map(p => (p.userId === producerUserId ? { ...p, stream: undefined } : p))
+      );
+    };
 
-    peerManagerRef.current = peerManager;
+    sfuManagerRef.current = sfuManager;
 
-    // Connect to signaling server
-    socketClient
-      .connect(token)
-      .then(() => {
+    // Refs hold unsubscribe functions so the cleanup callback can call them
+    // even though they are assigned inside the async setup function.
+    const unsubNewProducerRef = { current: () => {} };
+    const unsubProducerClosedRef = { current: () => {} };
+
+    const setup = async () => {
+      try {
+        await socketClient.connect(token);
+
+        // Register AFTER connect (socket now exists) but BEFORE joinRoom (no events missed).
+        unsubNewProducerRef.current = socketClient.onSfuNewProducer(async ({ producerId, userId: producerUserId, kind }) => {
+          if (producerUserId === userId) return;
+          if (!recvTransportReady.current) {
+            pendingProducers.current.push({ producerId, userId: producerUserId, kind });
+            return;
+          }
+          // A producer existing means that media kind is active. Update mediaState so the
+          // audio element isn't muted when joining a room where someone already has mic on.
+          if (!producerUserId.startsWith('tts:') && (kind === 'audio' || kind === 'video')) {
+            setParticipants(prev =>
+              prev.map(p => {
+                if (p.userId !== producerUserId) return p;
+                const cur = p.mediaState ?? { video: false, audio: false };
+                return { ...p, mediaState: { ...cur, [kind]: true } };
+              })
+            );
+          }
+          await consumeProducer(sfuManager, producerId, producerUserId);
+        });
+
+        unsubProducerClosedRef.current = socketClient.onSfuProducerClosed(({ producerId, userId: producerUserId }) => {
+          sfuManager.removeConsumerByProducerId(producerId, producerUserId);
+        });
+
+        const roomParticipants = await socketClient.joinRoom(roomId);
+        // Seed participants state immediately so streams can be attached when
+        // sfu:new-producer events arrive during setup.
+        setParticipants(
+          roomParticipants.map(p => ({
+            ...p,
+            stream: undefined,
+            mediaState: { video: false, audio: false },
+          }))
+        );
+
+        // Load mediasoup Device with the router's RTP capabilities
+        const caps = await socketClient.getSfuRouterRtpCapabilities(roomId);
+        await sfuManager.load(caps);
+
+        // Create WebRTC transports
+        const sendParams = await socketClient.createSfuTransport(roomId, 'send');
+        await sfuManager.createSendTransport(sendParams);
+
+        const recvParams = await socketClient.createSfuTransport(roomId, 'recv');
+        await sfuManager.createRecvTransport(recvParams);
+
+        recvTransportReady.current = true;
+
+        // Drain any sfu:new-producer events that arrived before recv transport was ready
+        const buffered = pendingProducers.current.splice(0);
+        for (const ev of buffered) {
+          if (!ev.userId.startsWith('tts:') && (ev.kind === 'audio' || ev.kind === 'video')) {
+            setParticipants(prev =>
+              prev.map(p => {
+                if (p.userId !== ev.userId) return p;
+                const cur = p.mediaState ?? { video: false, audio: false };
+                return { ...p, mediaState: { ...cur, [ev.kind]: true } };
+              })
+            );
+          }
+          await consumeProducer(sfuManager, ev.producerId, ev.userId);
+        }
+
+        // Start with media off; send initial media state
+        await socketClient.sendMediaState({ video: false, audio: false });
         setIsConnected(true);
-        return socketClient.joinRoom(roomId);
-      })
-      .catch(err => {
-        setError(err.message);
+      } catch (err: any) {
+        setError(err?.message || 'Failed to connect');
         setIsConnected(false);
-      });
+      }
+    };
+
+    setup();
 
     return () => {
-      peerManager.closeAllConnections();
+      unsubNewProducerRef.current();
+      unsubProducerClosedRef.current();
+      sfuManager.closeAllConnections();
       socketClient.leaveRoom(roomId).catch(console.error);
+      recvTransportReady.current = false;
+      pendingProducers.current = [];
+      ttsStreamsRef.current.clear();
     };
   }, [roomId, userId, token]);
 
-  // Initialize media streams when connected
-  useEffect(() => {
-    if (isConnected && !isInitialized) {
-      const initializeMedia = async () => {
-        try {
-          if (peerManagerRef.current) {
-            // Start with camera and mic off by default
-            const initialMediaState = { video: false, audio: false };
-            setMediaState(initialMediaState);
-
-            // Send initial media state to other participants
-
-            await socketClient.sendMediaState(initialMediaState);
-            setIsInitialized(true);
-          }
-        } catch (err) {
-          setError('Failed to initialize media');
-        }
-      };
-
-      initializeMedia();
+  // Helper to consume a producer and route its stream
+  async function consumeProducer(
+    sfuManager: SFUConnectionManager,
+    producerId: string,
+    producerUserId: string
+  ) {
+    try {
+      await sfuManager.consumeProducer(producerId, producerUserId);
+    } catch (err) {
+      console.error('Failed to consume producer', producerId, err);
     }
-  }, [isConnected, isInitialized]);
+  }
 
   // Handle socket events
   useEffect(() => {
     if (!isConnected) return;
 
     const unsubscribes = [
-      socketClient.onParticipantJoined(async data => {
+      socketClient.onParticipantJoined(data => {
         setParticipants(prev => [
           ...prev,
           { ...data, stream: undefined, mediaState: { video: false, audio: false } },
         ]);
-
-        // Create and send offer to new participant (always create offer, even if no local stream)
-        if (peerManagerRef.current) {
-          const offer = await peerManagerRef.current.createOffer(data.userId);
-
-          socketClient.sendSignal({
-            type: 'offer',
-            payload: offer,
-            targetUserId: data.userId,
-          });
-        }
+        // The new participant will produce, which triggers sfu:new-producer
       }),
 
       socketClient.onParticipantLeft(data => {
         setParticipants(prev => prev.filter(p => p.userId !== data.userId));
-      }),
-
-      socketClient.onRoomParticipants(participants => {
-        setParticipants(
-          participants.map(p => ({
-            ...p,
-            stream: undefined,
-            mediaState: { video: false, audio: false },
-          }))
-        );
       }),
 
       socketClient.onMediaStateChange(data => {
@@ -161,89 +205,38 @@ export function useWebRTC(roomId: string, userId: string, token: string) {
         );
       }),
 
-      socketClient.onSignal(async (data: SignalingMessage) => {
-        if (!peerManagerRef.current) return;
-
-        const response = await peerManagerRef.current.handleSignalingMessage(data);
-        if (response) {
-          socketClient.sendSignal({
-            type: response.type as SignalingType,
-            payload: response.payload,
-            targetUserId: data.fromUserId,
-          });
-        }
-      }),
     ];
 
     return () => unsubscribes.forEach(unsub => unsub());
-  }, [isConnected, localStream]);
-
-  // Set up ICE candidate handling and renegotiation
-  useEffect(() => {
-    if (!peerManagerRef.current) return;
-
-    peerManagerRef.current.onIceCandidate = (targetUserId, candidate) => {
-      socketClient.sendSignal({
-        type: 'ice-candidate',
-        payload: candidate,
-        targetUserId,
-      });
-    };
-
-    peerManagerRef.current.onRenegotiationNeeded = (targetUserId, offer) => {
-      socketClient.sendSignal({
-        type: 'offer',
-        payload: offer,
-        targetUserId,
-      });
-    };
-  }, [isConnected]);
+  }, [isConnected, userId]);
 
   const toggleCamera = useCallback(async () => {
+    const sfuManager = sfuManagerRef.current;
+    if (!sfuManager) return;
     try {
-      if (!peerManagerRef.current) return;
-      const isOn = await peerManagerRef.current.toggleVideo();
-      const newMediaState = { ...mediaState, video: isOn };
-
+      const isOn = await sfuManager.toggleVideo();
+      const newMediaState = { ...sfuManager.getMediaState(), video: isOn };
       setMediaState(newMediaState);
-      const newLocalStream = peerManagerRef.current.getLocalStream();
-
-      setLocalStream(newLocalStream);
-
-      // Ensure renegotiation callback is set
-      if (peerManagerRef.current && !peerManagerRef.current.onRenegotiationNeeded) {
-        peerManagerRef.current.onRenegotiationNeeded = (targetUserId, offer) => {
-          socketClient.sendSignal({
-            type: 'offer',
-            payload: offer,
-            targetUserId,
-          });
-        };
-      }
-
-      // Notify other participants of media state change
+      setLocalStream(sfuManager.getLocalStream());
       await socketClient.sendMediaState(newMediaState);
-    } catch (err) {
+    } catch {
       setError('Failed to access camera');
     }
-  }, [mediaState]);
+  }, []);
 
   const toggleAudio = useCallback(async () => {
+    const sfuManager = sfuManagerRef.current;
+    if (!sfuManager) return;
     try {
-      if (!peerManagerRef.current) return;
-      const isOn = await peerManagerRef.current.toggleAudio();
-      const newMediaState = { ...mediaState, audio: isOn };
-
+      const isOn = await sfuManager.toggleAudio();
+      const newMediaState = { ...sfuManager.getMediaState(), audio: isOn };
       setMediaState(newMediaState);
-      const ls = peerManagerRef.current.getLocalStream();
-      setLocalStream(ls);
-
-      // Notify other participants of media state change
+      setLocalStream(sfuManager.getLocalStream());
       await socketClient.sendMediaState(newMediaState);
-    } catch (err) {
+    } catch {
       setError('Failed to access microphone');
     }
-  }, [mediaState]);
+  }, []);
 
   return {
     participants,

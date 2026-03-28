@@ -185,7 +185,7 @@ export default function ParticipantVideo({
       }
       const liveVideoTracks = stream
         .getVideoTracks()
-        .filter(t => t.readyState === 'live' && !t.muted);
+        .filter(t => t.readyState === 'live');
       const liveAudioTracks = stream.getAudioTracks().filter(t => t.readyState === 'live');
       const hasVideo = liveVideoTracks.length > 0;
       const hasAudio = liveAudioTracks.length > 0;
@@ -224,14 +224,21 @@ export default function ParticipantVideo({
     attach();
 
     if (!stream) return;
-    const handleAdd = () => attach();
-    const handleRemove = () => attach();
-    stream.addEventListener?.('addtrack', handleAdd as EventListener);
-    stream.addEventListener?.('removetrack', handleRemove as EventListener);
+    const handleChange = () => attach();
+    stream.addEventListener?.('addtrack', handleChange as EventListener);
+    stream.addEventListener?.('removetrack', handleChange as EventListener);
+    // Re-attach when mediasoup consumer tracks start flowing after resume
+    const tracks = stream.getTracks();
+    for (const t of tracks) {
+      t.addEventListener('unmute', handleChange);
+    }
 
     return () => {
-      stream.removeEventListener?.('addtrack', handleAdd as EventListener);
-      stream.removeEventListener?.('removetrack', handleRemove as EventListener);
+      stream.removeEventListener?.('addtrack', handleChange as EventListener);
+      stream.removeEventListener?.('removetrack', handleChange as EventListener);
+      for (const t of tracks) {
+        t.removeEventListener('unmute', handleChange);
+      }
     };
   }, [stream, name, isMuted]);
 

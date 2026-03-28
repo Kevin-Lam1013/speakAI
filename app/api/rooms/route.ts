@@ -73,11 +73,13 @@ export async function POST(request: NextRequest) {
 
     const room = result.rows[0];
 
-    // Add creator as first participant
-    await query('INSERT INTO room_participants (room_id, user_id) VALUES ($1, $2)', [
-      room.id,
-      userId,
-    ]);
+    // Add creator as first participant (ON CONFLICT guards against double-submit)
+    await query(
+      `INSERT INTO room_participants (room_id, user_id)
+       VALUES ($1, $2)
+       ON CONFLICT (room_id, user_id) DO NOTHING`,
+      [room.id, userId]
+    );
 
     return NextResponse.json(
       {
